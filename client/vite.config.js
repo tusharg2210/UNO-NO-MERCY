@@ -5,18 +5,16 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,          // Same port as CRA
-    open: true,          // Auto open browser
+    port: 3000,
+    open: true,
     proxy: {
-      // Proxy API calls to backend
       '/api': {
-        target: 'http://localhost:5100',
+        target: 'https://uno-no-mercy-wq92.onrender.com', // ✅ FIXED
         changeOrigin: true,
       },
-      // Proxy Socket.IO to backend
       '/socket.io': {
-        target: 'http://localhost:5100',
-        ws: true,          // ⚠️ Important for WebSocket
+        target: 'https://uno-no-mercy-wq92.onrender.com', // ✅ FIXED
+        ws: true,
         changeOrigin: true,
       },
     },
