@@ -5,7 +5,9 @@ const connectDB = async () => {
   try {
     const { connect, connection } = mongoose;
     const conn = await connect(process.env.MONGO_URI, {
-      // Mongoose 8+ doesn't need these options but keeping for compatibility
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     });
 
     logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
