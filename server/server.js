@@ -22,11 +22,16 @@ import { initializeSocket } from './sockets/socketHandler.js';
 // Initialize Express
 const app = express();
 const server = createServer(app);
+const allowedOrigins = [
+  'http://localhost:3000',
+   process.env.CLIENT_URL,
+];
+
 
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -40,8 +45,9 @@ connectDB();
 
 // Middleware
 app.use(helmet());
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: 'https://uno-snowy.vercel.app',
   credentials: true,
 }));
 app.use(json({ limit: '10mb' }));
@@ -57,7 +63,7 @@ app.use('/api/games', gameRoutes);
 app.use('/api/users', userRoutes);
 
 // Health Check
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
