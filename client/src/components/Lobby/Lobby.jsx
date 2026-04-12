@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useSocket } from '../../context/SocketContext';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSocket } from '../../context/SocketContext.jsx';
 import toast from 'react-hot-toast';
 
 const Lobby = ({ user, onGameStart }) => {
-  const socket = useSocket();
+  const { socket, isConnected } = useSocket();
   const [roomCode, setRoomCode] = useState('');
   const [currentRoom, setCurrentRoom] = useState('');
   const [inRoom, setInRoom] = useState(false);
@@ -11,56 +11,105 @@ const Lobby = ({ user, onGameStart }) => {
   const [isHost, setIsHost] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // ⚠️ FIX: Use ref to track current room to avoid stale closure
+  const currentRoomRef = useRef('');
+
+  useEffect(() => {
+    currentRoomRef.current = currentRoom;
+  }, [currentRoom]);
+
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('room-created', ({ roomCode, game }) => {
+    const handleRoomCreated = ({ roomCode, game }) => {
+      console.log('✅ Room created:', roomCode);
       setCurrentRoom(roomCode);
+      currentRoomRef.current = roomCode;
       setInRoom(true);
       setIsHost(true);
-      setPlayers(game.players);
+      setPlayers(game.players || []);
       toast.success(`Room ${roomCode} created!`);
-    });
+    };
 
-    socket.on('player-joined', ({ game, username }) => {
-      setPlayers(game.players);
+    const handleRoomJoined = ({ roomCode, game }) => {
+      console.log('✅ Room joined:', roomCode);
+      setCurrentRoom(roomCode);
+      currentRoomRef.current = roomCode;
+      setInRoom(true);
+      setPlayers(game.players || []);
+      toast.success(`Joined room ${roomCode}!`);
+    };
+
+    const handlePlayerJoined = ({ game, username }) => {
+      console.log('👋 Player joined:', username);
+      setPlayers(game.players || []);
       toast(`🎮 ${username} joined!`, { icon: '👋' });
-    });
+    };
 
-    socket.on('game-started', () => {
-      onGameStart(currentRoom);
-    });
+    const handleGameStarted = (data) => {
+      console.log('🎮 Game started! Room:', currentRoomRef.current);
+      console.log('📦 Data received:', data);
+      // ⚠️ FIX: Use ref instead of stale state
+      onGameStart(currentRoomRef.current);
+    };
 
-    socket.on('player-disconnected', ({ username }) => {
-      toast(`${username} left the room`, { icon: '👋' });
-    });
+    const handlePlayerLeft = ({ username }) => {
+      toast(`${username} left`, { icon: '👋' });
+    };
 
-    socket.on('error', ({ message }) => {
+    const handleError = ({ message }) => {
+      console.error('❌ Socket error:', message);
       toast.error(message);
-    });
+    };
+
+    socket.on('room-created', handleRoomCreated);
+    socket.on('room-joined', handleRoomJoined);
+    socket.on('player-joined', handlePlayerJoined);
+    socket.on('game-started', handleGameStarted);
+    socket.on('player-left', handlePlayerLeft);
+    socket.on('player-disconnected', handlePlayerLeft);
+    socket.on('error', handleError);
 
     return () => {
-      socket.off('room-created');
-      socket.off('player-joined');
-      socket.off('game-started');
-      socket.off('player-disconnected');
-      socket.off('error');
+      socket.off('room-created', handleRoomCreated);
+      socket.off('room-joined', handleRoomJoined);
+      socket.off('player-joined', handlePlayerJoined);
+      socket.off('game-started', handleGameStarted);
+      socket.off('player-left', handlePlayerLeft);
+      socket.off('player-disconnected', handlePlayerLeft);
+      socket.off('error', handleError);
     };
-  }, [socket, currentRoom, onGameStart]);
+  }, [socket, onGameStart]);
 
   const createRoom = () => {
+    if (!socket || !isConnected) {
+      toast.error('Not connected to server. Please wait...');
+      return;
+    }
+    console.log('📤 Creating room for:', user.username);
     socket.emit('create-room', { username: user.username, userId: user.id });
   };
 
   const joinRoom = () => {
+    if (!socket || !isConnected) {
+      toast.error('Not connected to server. Please wait...');
+      return;
+    }
     if (!roomCode.trim()) return toast.error('Enter a room code!');
-    socket.emit('join-room', { roomCode: roomCode.toUpperCase(), username: user.username });
-    setCurrentRoom(roomCode.toUpperCase());
-    setInRoom(true);
+
+    const code = roomCode.toUpperCase().trim();
+    console.log('📤 Joining room:', code);
+    socket.emit('join-room', { roomCode: code, username: user.username, userId: user.id });
   };
 
   const startGame = () => {
+    if (!socket || !isConnected) {
+      toast.error('Not connected to server. Please wait...');
+      return;
+    }
     if (players.length < 2) return toast.error('Need at least 2 players!');
+
+    console.log('📤 Starting game in room:', currentRoom);
     socket.emit('start-game', { roomCode: currentRoom });
   };
 
@@ -71,7 +120,9 @@ const Lobby = ({ user, onGameStart }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // MAIN LOBBY
+  // ============================
+  // MAIN LOBBY (Not in a room)
+  // ============================
   if (!inRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -82,10 +133,24 @@ const Lobby = ({ user, onGameStart }) => {
               UNO
             </h1>
             <p className="text-3xl font-bold text-red-500 tracking-widest">NO MERCY 🔥</p>
+            
+            {/* Connection Status */}
             <div className="mt-4 inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-gray-300 text-sm">Welcome, {user.username}</span>
+              <div className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+              }`} />
+              <span className="text-gray-300 text-sm">
+                {isConnected 
+                  ? `Welcome, ${user.username}` 
+                  : 'Connecting to server...'
+                }
+              </span>
             </div>
+
+            {/* Debug info */}
+            <p className="text-gray-600 text-xs mt-1">
+              Server: {import.meta.env.VITE_SERVER_URL || 'http://localhost:5000'}
+            </p>
           </div>
 
           <div className="grid gap-6">
@@ -98,8 +163,16 @@ const Lobby = ({ user, onGameStart }) => {
                   <p className="text-gray-400 text-sm">Start a new game and invite friends</p>
                 </div>
               </div>
-              <button onClick={createRoom} className="btn-primary w-full">
-                ✨ Create New Room
+              <button 
+                onClick={createRoom} 
+                disabled={!isConnected}
+                className={`w-full py-3 px-8 rounded-xl font-bold transition-all duration-300
+                  ${isConnected 
+                    ? 'btn-primary' 
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  }`}
+              >
+                {isConnected ? '✨ Create New Room' : '⏳ Connecting...'}
               </button>
             </div>
 
@@ -121,35 +194,19 @@ const Lobby = ({ user, onGameStart }) => {
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
+                  disabled={!isConnected}
                 />
-                <button onClick={joinRoom} className="btn-primary">
+                <button 
+                  onClick={joinRoom} 
+                  disabled={!isConnected}
+                  className={`px-6 py-3 rounded-xl font-bold transition-all
+                    ${isConnected 
+                      ? 'btn-primary' 
+                      : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                >
                   Join →
                 </button>
-              </div>
-            </div>
-
-            {/* Rules Card */}
-            <div className="glass p-6">
-              <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
-                🔥 No Mercy Rules
-              </h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  { icon: '💀', name: '+10 Card', desc: 'Draw 10 cards!' },
-                  { icon: '🔥', name: '+6 Card', desc: 'Draw 6 cards!' },
-                  { icon: '🚫', name: 'Skip Everyone', desc: 'Play again!' },
-                  { icon: '🔀', name: 'Swap Hands', desc: 'Trade cards!' },
-                  { icon: '🎰', name: 'Color Roulette', desc: 'Random color!' },
-                  { icon: '💣', name: 'Discard All', desc: 'Dump matching!' },
-                ].map((rule) => (
-                  <div key={rule.name} className="flex items-center gap-2 bg-white/5 rounded-lg p-2">
-                    <span className="text-xl">{rule.icon}</span>
-                    <div>
-                      <p className="font-semibold text-xs">{rule.name}</p>
-                      <p className="text-gray-400 text-xs">{rule.desc}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -158,7 +215,9 @@ const Lobby = ({ user, onGameStart }) => {
     );
   }
 
+  // ============================
   // WAITING ROOM
+  // ============================
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-lg animate-fade-in">
@@ -197,7 +256,6 @@ const Lobby = ({ user, onGameStart }) => {
               <div
                 key={player.id || index}
                 className="flex items-center gap-3 bg-white/5 rounded-xl p-3 animate-slide-up"
-                style={{ animationDelay: `${index * 100}ms` }}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold
                   ${index === 0 
@@ -218,7 +276,7 @@ const Lobby = ({ user, onGameStart }) => {
             ))}
 
             {/* Empty Slots */}
-            {Array(6 - players.length).fill(null).map((_, i) => (
+            {Array(Math.max(0, 6 - players.length)).fill(null).map((_, i) => (
               <div
                 key={`empty-${i}`}
                 className="flex items-center gap-3 border border-dashed border-white/10 rounded-xl p-3"
@@ -234,7 +292,7 @@ const Lobby = ({ user, onGameStart }) => {
 
         {/* Actions */}
         <div className="space-y-3">
-          {isHost && (
+          {isHost ? (
             <button
               onClick={startGame}
               disabled={players.length < 2}
@@ -246,9 +304,7 @@ const Lobby = ({ user, onGameStart }) => {
             >
               {players.length >= 2 ? '🚀 Start Game!' : '⏳ Need at least 2 players'}
             </button>
-          )}
-
-          {!isHost && (
+          ) : (
             <div className="text-center py-4">
               <div className="inline-flex items-center gap-2 text-gray-400">
                 <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />

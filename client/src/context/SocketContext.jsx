@@ -12,14 +12,15 @@ export const SocketProvider = ({ children }) => {
     console.log('🔌 Connecting to:', serverUrl);
 
     const newSocket = io(serverUrl, {
-      transports: ['websocket', 'polling'], 
+      transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      withCredentials: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      timeout: 30000,
+      withCredentials: false,
+      forceNew: true,
     });
 
     newSocket.on('connect', () => {

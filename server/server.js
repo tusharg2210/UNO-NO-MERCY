@@ -57,6 +57,13 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+if (process.env.NODE_ENV === 'production') {
+  setInterval(() => {
+    fetch(`https://your-backend-url.onrender.com/health`)
+      .catch(() => {});
+  }, 14 * 60 * 1000); // 14 minutes
+}
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gameRoutes);
