@@ -13,7 +13,7 @@
     box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
   }
   .card-hover {
-    @apply transition-all duration-300 ease-out;
+    @apply transition-all duration-100 ease-out;
   }
   .card-hover:hover {
     transform: translateY(-30px) scale(1.15);
@@ -57,17 +57,17 @@
 
 /* Card gradient backgrounds */
 .card-gradient-red {
-  background: linear-gradient(135deg, #DC2626, #991B1B);
+  background: linear-gradient(135deg, #cf4646, #4f0606);
 }
 .card-gradient-blue {
-  background: linear-gradient(135deg, #2563EB, #1E40AF);
+  background: linear-gradient(135deg, #274d9f, #081d60);
 }
 .card-gradient-green {
-  background: linear-gradient(135deg, #16A34A, #15803D);
+  background: linear-gradient(135deg, #299a52, #033615);
 }
 .card-gradient-yellow {
-  background: linear-gradient(135deg, #EAB308, #CA8A04);
+  background: linear-gradient(135deg, #fdd250, #a98202);
 }
 .card-gradient-wild {
-  background: linear-gradient(135deg, #DC2626, #2563EB, #16A34A, #EAB308);
+  background: linear-gradient(135deg, #a179ff, #0c011c);
 }
