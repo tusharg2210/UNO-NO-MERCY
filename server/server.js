@@ -22,16 +22,12 @@ import { initializeSocket } from './sockets/socketHandler.js';
 // Initialize Express
 const app = express();
 const server = createServer(app);
-const allowedOrigins = [
-  'http://localhost:3000',
-   process.env.CLIENT_URL,
-];
 
 
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: process.env.CLIENT_URL,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -47,7 +43,7 @@ connectDB();
 app.use(helmet());
 
 app.use(cors({
-  origin: 'https://uno-snowy.vercel.app',
+  origin: process.env.CLIENT_URL,
   credentials: true,
 }));
 app.use(json({ limit: '10mb' }));
@@ -59,7 +55,7 @@ if (process.env.NODE_ENV === 'development') {
 
 if (process.env.NODE_ENV === 'production') {
   setInterval(() => {
-    fetch(`https://your-backend-url.onrender.com/health`)
+    fetch(`${process.env.CLIENT_URL}/health`)
       .catch(() => {});
   }, 14 * 60 * 1000); // 14 minutes
 }
