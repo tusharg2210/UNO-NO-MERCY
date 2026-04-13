@@ -23,7 +23,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-uno-gradient">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
       {/* ⚠️ Show connection status */}
       <ConnectionStatus 
         isConnected={isConnected} 
@@ -55,9 +55,9 @@ function App() {
         position="top-center"
         toastOptions={{
           style: {
-            background: '#1E293B',
-            color: '#fff',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#0f172a',
+            color: '#e2e8f0',
+            border: '1px solid rgba(148,163,184,0.25)',
           },
         }}
       />

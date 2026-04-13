@@ -39,6 +39,8 @@ export function createDeck() {
     for (let i = 0; i < 2; i++) {
       deck.push({ id: id++, type: CARD_TYPES.DRAW_TWO, color, value: 'draw_two' });
     }
+    // One Draw Four per color (action card)
+    deck.push({ id: id++, type: CARD_TYPES.DRAW_FOUR, color, value: 'draw_four' });
 
     // === NO MERCY COLORED CARDS ===
 
@@ -58,13 +60,6 @@ export function createDeck() {
       value: 'discard_all',
     });
 
-    // Reverse Draw Four (1 per color)
-    deck.push({
-      id: id++,
-      type: CARD_TYPES.REVERSE_DRAW_FOUR,
-      color,
-      value: 'reverse_draw_four',
-    });
   });
 
   // === WILD CARDS (No color) ===
@@ -91,9 +86,9 @@ export function createDeck() {
     deck.push({ id: id++, type: CARD_TYPES.WILD_DRAW_TEN, color: null, value: 'wild_draw_ten' });
   }
 
-  // Swap Hands (2)
-  for (let i = 0; i < 2; i++) {
-    deck.push({ id: id++, type: CARD_TYPES.SWAP_HANDS, color: null, value: 'swap_hands' });
+  // Wild Reverse Draw Four (4)
+  for (let i = 0; i < 4; i++) {
+    deck.push({ id: id++, type: CARD_TYPES.REVERSE_DRAW_FOUR, color: null, value: 'reverse_draw_four' });
   }
 
   // Wild Color Roulette (2)
@@ -130,6 +125,7 @@ function getCardPoints(card) {
     case CARD_TYPES.SKIP:
     case CARD_TYPES.REVERSE:
     case CARD_TYPES.DRAW_TWO:
+    case CARD_TYPES.DRAW_FOUR:
       return 20;
     case CARD_TYPES.WILD:
     case CARD_TYPES.WILD_DRAW_FOUR:

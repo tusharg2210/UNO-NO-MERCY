@@ -4,14 +4,13 @@
 
 @layer base {
   body {
-    @apply bg-uno-darker text-white font-sans overflow-hidden;
+    @apply bg-slate-950 text-slate-100 font-sans;
   }
 }
 
 @layer components {
   .card-shadow {
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), 
-                0 0 5px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
   }
   .card-hover {
     @apply transition-all duration-300 ease-out;
@@ -23,26 +22,24 @@
     z-index: 50;
   }
   .glass {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+    @apply bg-slate-900/70 backdrop-blur-sm border border-slate-700/60 rounded-xl;
   }
   .glass-dark {
-    @apply bg-black/30 backdrop-blur-md border border-white/5 rounded-2xl;
+    @apply bg-slate-950/85 backdrop-blur-sm border border-slate-800/80 rounded-xl;
   }
   .btn-primary {
-    @apply bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 
-           hover:to-blue-700 text-white font-bold py-3 px-8 rounded-xl 
-           transition-all duration-300 hover:scale-105 hover:shadow-lg 
-           hover:shadow-purple-500/25 active:scale-95;
+    @apply bg-slate-100 text-slate-900 font-semibold py-3 px-6 rounded-lg
+           transition-all duration-200 hover:bg-white active:scale-[0.99]
+           disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-danger {
-    @apply bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 
-           hover:to-pink-700 text-white font-bold py-3 px-8 rounded-xl 
-           transition-all duration-300 hover:scale-105 active:scale-95;
+    @apply bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg
+           transition-all duration-200 active:scale-[0.99];
   }
   .input-field {
-    @apply w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl 
-           text-white placeholder-gray-400 focus:outline-none focus:ring-2 
-           focus:ring-purple-500 focus:border-transparent transition-all duration-300;
+    @apply w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg
+           text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2
+           focus:ring-slate-500/70 focus:border-slate-500 transition-all duration-200;
   }
 }
 
@@ -54,7 +51,7 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(148, 163, 184, 0.35);
   border-radius: 3px;
 }
 

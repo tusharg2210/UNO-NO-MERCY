@@ -42,6 +42,7 @@ export function canStackDraw(card) {
 export function getDrawAmount(cardType) {
   const drawAmounts = {
     [CARD_TYPES.DRAW_TWO]: 2,
+    [CARD_TYPES.DRAW_FOUR]: 4,
     [CARD_TYPES.WILD_DRAW_FOUR]: 4,
     [CARD_TYPES.REVERSE_DRAW_FOUR]: 4,
     [CARD_TYPES.WILD_DRAW_SIX]: 6,
@@ -54,14 +55,8 @@ export function getDrawAmount(cardType) {
  * Check if a card requires color selection
  */
 export function requiresColorChoice(card) {
-  const wildTypes = [
-    CARD_TYPES.WILD,
-    CARD_TYPES.WILD_DRAW_FOUR,
-    CARD_TYPES.WILD_DRAW_SIX,
-    CARD_TYPES.WILD_DRAW_TEN,
-    CARD_TYPES.SWAP_HANDS,
-  ];
-  return wildTypes.includes(card.type);
+  // Only wild (colorless) cards require color selection.
+  return !card.color;
 }
 
 /**
@@ -75,6 +70,10 @@ export function isValidColor(color) {
  * Check if game state is valid for a play action
  */
 export function validatePlayAction(game, playerId, cardId) {
+  if (game.pendingRoulette) {
+    return { valid: false, error: 'Wild roulette color selection is pending.' };
+  }
+
   // Check game is in progress
   if (game.status !== 'playing') {
     return { valid: false, error: 'Game is not in progress.' };

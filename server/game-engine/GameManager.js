@@ -29,6 +29,7 @@ class GameManager {
       winner: null,
       winnerUsername: null,
       round: 1,
+      pendingRoulette: null,
       gameLog: [],
       settings: {
         maxPlayers: settings.maxPlayers || 6,
@@ -186,6 +187,9 @@ class GameManager {
   playCard(roomCode, playerId, cardId, chosenColor = null, swapTargetId = null) {
     const game = this.games.get(roomCode);
     if (!game) return { success: false, error: 'Game not found.' };
+    if (game.pendingRoulette) {
+      return { success: false, error: 'Wild roulette color selection is pending.' };
+    }
 
     // Validate action
     const validation = validatePlayAction(game, playerId, cardId);
@@ -194,8 +198,8 @@ class GameManager {
     const { card, cardIndex } = validation;
     const currentPlayer = game.players[game.currentPlayerIndex];
 
-    // Validate color choice for wild cards
-    if (requiresColorChoice(card) && card.type !== CARD_TYPES.WILD_COLOR_ROULETTE) {
+    // Validate color choice for wild cards only.
+    if (requiresColorChoice(card)) {
       if (!chosenColor || !isValidColor(chosenColor)) {
         return { success: false, error: 'Must choose a valid color.' };
       }
@@ -309,6 +313,15 @@ class GameManager {
         effects.type = 'draw';
         break;
 
+      case CARD_TYPES.DRAW_FOUR:
+        game.drawStack += 4;
+        game.currentColor = card.color;
+        this.resolveDrawStack(game);
+        effects.skipNext = true;
+        effects.message = `+4! Draw stack: ${game.drawStack}`;
+        effects.type = 'draw';
+        break;
+
       case CARD_TYPES.WILD:
         game.currentColor = chosenColor;
         effects.message = `🌈 Color changed to ${chosenColor}`;
@@ -365,10 +378,10 @@ class GameManager {
       case CARD_TYPES.REVERSE_DRAW_FOUR:
         game.direction *= -1;
         game.drawStack += 4;
-        game.currentColor = card.color;
+        game.currentColor = chosenColor;
         this.resolveDrawStack(game);
         effects.skipNext = true;
-        effects.message = `🔥 Reverse + Draw 4!`;
+        effects.message = `🔥 Reverse + Draw 4! Color: ${chosenColor}`;
         effects.type = 'no_mercy';
         break;
 
@@ -390,16 +403,18 @@ class GameManager {
       }
 
       case CARD_TYPES.WILD_COLOR_ROULETTE: {
-        const rouletteColor = chosenColor && isValidColor(chosenColor)
-          ? chosenColor
-          : COLORS[Math.floor(Math.random() * COLORS.length)];
-        const rouletteResult = this.resolveColorRoulette(game, rouletteColor);
-        game.currentColor = rouletteColor;
-        effects.message = `🎰 Roulette (${rouletteColor.toUpperCase()}): ${rouletteResult.targetUsername} drew ${rouletteResult.drawnCount} cards`;
-        effects.rouletteColor = rouletteColor;
-        effects.rouletteTarget = rouletteResult.targetId;
-        effects.rouletteDrawnCount = rouletteResult.drawnCount;
-        effects.type = 'no_mercy';
+        const targetIndex = this.getNextPlayerIndex(game);
+        const targetPlayer = game.players[targetIndex];
+        game.pendingRoulette = {
+          targetPlayerId: targetPlayer.id,
+          targetPlayerIndex: targetIndex,
+          playedBy: game.players[game.currentPlayerIndex].id,
+        };
+        game.currentPlayerIndex = targetIndex;
+        effects.message = `🎰 Wild Roulette played! ${targetPlayer.username} must choose a color.`;
+        effects.rouletteTarget = targetPlayer.id;
+        effects.type = 'roulette_pending';
+        effects.skipNext = true;
         break;
       }
 
@@ -458,6 +473,9 @@ class GameManager {
   drawCard(roomCode, playerId) {
     const game = this.games.get(roomCode);
     if (!game) return { success: false, error: 'Game not found.' };
+    if (game.pendingRoulette) {
+      return { success: false, error: 'Choose roulette color before drawing.' };
+    }
 
     if (game.status !== 'playing') {
       return { success: false, error: 'Game is not in progress.' };
@@ -579,6 +597,45 @@ class GameManager {
     return { success: false, error: 'Cannot catch this player.' };
   }
 
+  chooseRouletteColor(roomCode, playerId, chosenColor) {
+    const game = this.games.get(roomCode);
+    if (!game) return { success: false, error: 'Game not found.' };
+    if (!game.pendingRoulette) {
+      return { success: false, error: 'No roulette choice is pending.' };
+    }
+    if (game.pendingRoulette.targetPlayerId !== playerId) {
+      return { success: false, error: 'Only the next player can choose roulette color.' };
+    }
+    if (!isValidColor(chosenColor)) {
+      return { success: false, error: 'Must choose a valid color.' };
+    }
+
+    const targetIndex = game.pendingRoulette.targetPlayerIndex;
+    const rouletteResult = this.resolveColorRouletteForPlayer(game, targetIndex, chosenColor);
+    game.currentColor = chosenColor;
+    game.pendingRoulette = null;
+
+    const effects = {
+      skipNext: true,
+      type: 'no_mercy',
+      message: `🎰 Roulette (${chosenColor.toUpperCase()}): ${rouletteResult.targetUsername} drew ${rouletteResult.drawnCount} cards`,
+      rouletteColor: chosenColor,
+      rouletteTarget: rouletteResult.targetId,
+      rouletteDrawnCount: rouletteResult.drawnCount,
+    };
+
+    const mercyState = this.applyMercyRule(game);
+    if (mercyState.knockedOutPlayers.length > 0) {
+      effects.knockedOutPlayers = mercyState.knockedOutPlayers;
+    }
+
+    const mercyWin = this.resolveMercyWin(game, effects);
+    if (mercyWin) return mercyWin;
+
+    this.nextTurn(game);
+    return { success: true, game, effects };
+  }
+
   // ========================
   // TURN MANAGEMENT
   // ========================
@@ -675,6 +732,11 @@ class GameManager {
       direction: game.direction,
       currentColor: game.currentColor,
       drawStack: game.drawStack,
+      pendingRoulette: game.pendingRoulette
+        ? {
+            targetPlayerId: game.pendingRoulette.targetPlayerId,
+          }
+        : null,
       status: game.status,
       settings: game.settings,
       round: game.round,
@@ -762,8 +824,7 @@ class GameManager {
     }
   }
 
-  resolveColorRoulette(game, rouletteColor) {
-    const targetIndex = this.getNextPlayablePlayerIndex(game, game.currentPlayerIndex);
+  resolveColorRouletteForPlayer(game, targetIndex, rouletteColor) {
     const targetPlayer = game.players[targetIndex];
     const revealed = [];
 
@@ -783,7 +844,6 @@ class GameManager {
     }
 
     targetPlayer.hand.push(...revealed);
-    this.nextTurn(game);
 
     return {
       targetId: targetPlayer.id,
@@ -795,7 +855,7 @@ class GameManager {
   applyMercyRule(game) {
     const knockedOutPlayers = [];
     for (const player of game.players) {
-      if (!player.knockedOut && player.hand.length >= 25) {
+      if (!player.knockedOut && player.hand.length > 25) {
         player.knockedOut = true;
         knockedOutPlayers.push({
           id: player.id,
