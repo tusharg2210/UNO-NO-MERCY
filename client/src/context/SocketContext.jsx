@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
+import { getSocketIoUrl, isRemoteDevProxy } from '../utils/serverUrl.js';
 
 const SocketContext = createContext(null);
 
@@ -9,9 +10,10 @@ export const SocketProvider = ({ children }) => {
   const [connectionError, setConnectionError] = useState(null);
 
   useEffect(() => {
-    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5100';
+    const serverUrl = getSocketIoUrl();
+    const useDevProxy = isRemoteDevProxy();
 
-    console.log('🔌 Connecting to:', serverUrl);
+    console.log('🔌 Connecting to:', serverUrl, useDevProxy ? '(via Vite proxy)' : '');
 
     const newSocket = io(serverUrl, {
       transports: ['polling', 'websocket'],

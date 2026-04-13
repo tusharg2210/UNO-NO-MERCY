@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-
-const API_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5100';
+import { getApiBaseUrl } from '../../utils/serverUrl.js';
 
 const AuthPage = ({ onAuth }) => {
 const [isLogin, setIsLogin] = useState(true);
@@ -30,7 +29,7 @@ setLoading(true);
 try {
   const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(formData),
