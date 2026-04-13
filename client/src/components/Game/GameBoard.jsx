@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../../context/SocketContext.jsx';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import Card from '../Cards/Card.jsx';
 import CardBack from '../Cards/CardBack.jsx';
 import PlayerHand from '../Cards/PlayerHand.jsx';
+import { getStackablePlayableFilter } from '../../utils/drawStack.js';
 import ColorPicker from '../UI/ColorPicker.jsx';
 import SwapPicker from '../UI/SwapPicker.jsx';
 import OpponentRow from './OpponentRow.jsx';
 import GameOverModal from '../UI/GameOverModal.jsx';
 import EffectsBanner from '../UI/EffectsBanner.jsx';
-
-// LOGO 
-import logo from '../../assets/UNO_Logo.svg';
+import GameRulesPanel from './GameRulesPanel.jsx';
 
 const GameBoard = ({ roomCode, user, onLeave }) => {
   const { socket, isConnected } = useSocket();
@@ -21,13 +20,13 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
   const [pendingCard, setPendingCard] = useState(null);
+  const [pendingSwapTargetId, setPendingSwapTargetId] = useState(null);
+  const [pendingSevenCard, setPendingSevenCard] = useState(null);
   const [effects, setEffects] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
-  const rouletteSelectionPending =
-    gameState?.pendingRoulette?.targetPlayerId === socket?.id;
-
+  const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false);
   // ⚠️ FIX: Add timeout for loading screen
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -78,9 +77,6 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
       if (effects?.message) {
         setEffects(effects);
         setTimeout(() => setEffects(null), 3000);
-        if (effects.type === 'roulette_pending') {
-          toast('Wild roulette played. Next player must choose a color.', { icon: '' });
-        }
       }
       if (isOver) {
         setGameOver(true);
@@ -104,7 +100,7 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     const handleUnoCaught = ({ hand, gameState, catcher, caught }) => {
       setHand(hand || []);
       setGameState(gameState);
-      toast(`${catcher} caught ${caught}. +4 penalty`, {
+      toast(`${catcher} caught ${caught}. +2 cards`, {
         icon: '',
         style: { background: '#DC2626', color: '#fff' },
       });
@@ -144,18 +140,11 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     };
   }, [socket]);
 
-  useEffect(() => {
-    if (rouletteSelectionPending) {
-      setShowColorPicker(true);
-      setPendingCard(null);
-    }
-  }, [rouletteSelectionPending]);
-
-  // ... (keep all existing handler functions same)
-
   const isMyTurn = useCallback(() => {
-    if (!gameState) return false;
-    return gameState.players[gameState.currentPlayerIndex]?.id === socket?.id;
+    if (!gameState || !socket) return false;
+    const me = gameState.players.find((p) => p.id === socket.id);
+    if (me?.knockedOut) return false;
+    return gameState.players[gameState.currentPlayerIndex]?.id === socket.id;
   }, [gameState, socket]);
 
   const getPlayableCards = useCallback(() => {
@@ -164,8 +153,7 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
 
     return hand.filter(card => {
       if (gameState.drawStack > 0) {
-        return ['draw_two', 'draw_four', 'wild_draw_four', 'wild_draw_six',
-                'wild_draw_ten', 'reverse_draw_four'].includes(card.type);
+        return getStackablePlayableFilter(topCard)(card);
       }
       if (!card.color) return true;
       if (card.type === 'discard_all') return card.color === gameState.currentColor;
@@ -176,15 +164,40 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   }, [gameState, hand, isMyTurn]);
 
   const handlePlayCard = (card) => {
-    if (!isMyTurn()) return;
-    const wildTypes = ['wild', 'wild_draw_four', 'wild_draw_six', 'wild_draw_ten'];
-    if (card.type === 'swap_hands') {
-      setPendingCard(card);
+    if (!isMyTurn() || !gameState || !socket) return;
+    const aliveOpp = gameState.players.filter(
+      (p) => p.id !== socket.id && !p.knockedOut
+    );
+    const wildTypes = [
+      'wild',
+      'wild_draw_four',
+      'wild_draw_six',
+      'wild_draw_ten',
+      'reverse_draw_four',
+      'wild_color_roulette',
+    ];
+    if (card.type === 'number' && card.value === 7) {
+      if (aliveOpp.length === 1) {
+        socket.emit('play-card', {
+          roomCode,
+          cardId: card.id,
+          swapTargetId: aliveOpp[0].id,
+        });
+        return;
+      }
+      setPendingSevenCard(card);
       setShowSwapPicker(true);
       return;
     }
-    if (card.type === 'wild_color_roulette') {
-      socket.emit('play-card', { roomCode, cardId: card.id });
+    if (card.type === 'swap_hands') {
+      if (aliveOpp.length === 1) {
+        setPendingCard(card);
+        setPendingSwapTargetId(aliveOpp[0].id);
+        setShowColorPicker(true);
+        return;
+      }
+      setPendingCard(card);
+      setShowSwapPicker(true);
       return;
     }
     if (wildTypes.includes(card.type)) {
@@ -196,9 +209,16 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   };
 
   const handleColorChoice = (color) => {
-    if (rouletteSelectionPending) {
-      socket.emit('choose-roulette-color', { roomCode, chosenColor: color });
+    if (pendingSwapTargetId && pendingCard?.type === 'swap_hands') {
+      socket.emit('play-card', {
+        roomCode,
+        cardId: pendingCard.id,
+        swapTargetId: pendingSwapTargetId,
+        chosenColor: color,
+      });
       setShowColorPicker(false);
+      setPendingCard(null);
+      setPendingSwapTargetId(null);
       return;
     }
     if (!pendingCard) return;
@@ -210,25 +230,73 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   };
 
   const handleSwapChoice = (targetId) => {
-    socket.emit('play-card', {
-      roomCode, cardId: pendingCard.id, swapTargetId: targetId, chosenColor: 'red',
-    });
+    if (pendingSevenCard) {
+      socket.emit('play-card', {
+        roomCode,
+        cardId: pendingSevenCard.id,
+        swapTargetId: targetId,
+      });
+      setPendingSevenCard(null);
+      setShowSwapPicker(false);
+      return;
+    }
+    setPendingSwapTargetId(targetId);
     setShowSwapPicker(false);
-    setPendingCard(null);
+    setShowColorPicker(true);
   };
 
   const handleDrawCard = () => {
     if (!isMyTurn()) return;
+    const me = gameState?.players.find((p) => p.id === socket?.id);
+    if (me?.knockedOut) {
+      toast.error('You are out of this game.');
+      return;
+    }
     socket.emit('draw-card', { roomCode });
   };
 
-  const handleSayUno = () => {
+  const handleSayUno = useCallback(() => {
+    if (!socket || !roomCode) return;
     socket.emit('say-uno', { roomCode });
-  };
+  }, [socket, roomCode]);
 
-  const handleCatchUno = (targetId) => {
-    socket.emit('catch-uno', { roomCode, targetPlayerId: targetId });
-  };
+  const handleCatchUno = useCallback(
+    (targetId) => {
+      if (!socket || !roomCode) return;
+      socket.emit('catch-uno', { roomCode, targetPlayerId: targetId });
+    },
+    [socket, roomCode]
+  );
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const k = e.key.toLowerCase();
+      if (k === 'u') {
+        e.preventDefault();
+        const me = gameState?.players.find((p) => p.id === socket?.id);
+        if (me?.knockedOut || hand.length > 2) return;
+        handleSayUno();
+      }
+      if (k === 'c') {
+        e.preventDefault();
+        if (!gameState || !socket) return;
+        const me = gameState.players.find((p) => p.id === socket.id);
+        if (me?.knockedOut) return;
+        const target = gameState.players.find(
+          (p) =>
+            p.id !== socket.id &&
+            !p.knockedOut &&
+            p.cardCount === 1 &&
+            !p.saidUno
+        );
+        if (target) handleCatchUno(target.id);
+        else toast('No one to catch right now.', { icon: '' });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [gameState, socket, hand.length, handleSayUno, handleCatchUno]);
 
   // ⚠️ FIX: Better loading screen with debug info
   if (!gameState) {
@@ -304,18 +372,16 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   // GAME BOARD (when gameState exists)
   // ============================
   const myPlayer = gameState.players.find(p => p.id === socket?.id);
+  const imSpectating = !!myPlayer?.knockedOut;
   const opponents = gameState.players.filter(p => p.id !== socket?.id);
   const currentPlayerName = gameState.players[gameState.currentPlayerIndex]?.username;
-  const rouletteTargetName = gameState.pendingRoulette
-    ? gameState.players.find((p) => p.id === gameState.pendingRoulette.targetPlayerId)?.username
-    : null;
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
-      {/* ... rest of your game board UI stays the same ... */}
-      
+      <div className="flex flex-1 w-full max-w-[1920px] mx-auto min-h-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
       {/* Top Bar */}
-      <div className="relative z-20 flex items-center justify-between px-4 py-2 glass-dark mx-2 mt-2 rounded-xl">
+      <div className="relative z-20 flex items-center justify-between px-4 py-2 glass-dark mx-2 mt-2 rounded-xl shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={onLeave}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
@@ -323,7 +389,20 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
           </button>
           <span className="text-sm text-gray-400">Room: <span className="text-white font-mono">{roomCode}</span></span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            type="button"
+            className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35 hover:bg-amber-500/30 transition-colors"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches) {
+                document.getElementById('game-rules-aside')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              } else {
+                setRulesDrawerOpen(true);
+              }
+            }}
+          >
+            Rules
+          </button>
           <div className="flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full">
             <span className={`text-lg ${gameState.direction === 1 ? '' : 'scale-x-[-1]'} inline-block`}>↻</span>
             <span className="text-xs text-gray-400">{gameState.direction === 1 ? 'CW' : 'CCW'}</span>
@@ -343,57 +422,69 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
 
       <AnimatePresence>{effects && <EffectsBanner effects={effects} />}</AnimatePresence>
 
+      {imSpectating && (
+        <div className="relative z-20 mx-4 mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-100">
+          You are out (Mercy: 25+ cards). Your cards were shuffled back into the draw pile. You can watch until the game ends.
+        </div>
+      )}
+
       {/* Opponents */}
       <div className="relative z-10 flex-shrink-0 px-4 py-3">
         <OpponentRow opponents={opponents} currentPlayerIndex={gameState.currentPlayerIndex}
           players={gameState.players} onCatchUno={handleCatchUno} />
       </div>
 
-      {/* Center Play Area */}
-      <div className="flex-1 flex items-center justify-center relative z-10">
-        <div className="flex items-center gap-8 sm:gap-16">
-          <button onClick={handleDrawCard} disabled={!isMyTurn()}
-            className={`relative ${isMyTurn() ? 'cursor-pointer hover:scale-110' : 'cursor-not-allowed'} transition-transform`}>
-            <div className="relative w-20 h-28 sm:w-24 sm:h-36 rounded-xl bg-black
-              border-2 ${isMyTurn() ? 'border-white/40' : 'border-white/10'} flex flex-col items-center justify-center card-shadow">
-                <img src={logo} alt="UNO Logo" className="w-20 h-20" />
-            </div>
-          </button>
+      {/* Table — draw & discard */}
+      <div className="flex-1 flex items-center justify-center relative z-10 px-3 py-4 min-h-[200px]">
+        <div
+          className="relative w-full max-w-xl rounded-[2rem] border border-emerald-800/50 
+          bg-gradient-to-b from-emerald-950 via-emerald-950/92 to-[#042f1f] 
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_25px_50px_rgba(0,0,0,0.45)] px-8 py-10"
+        >
+          <div className="absolute inset-2 rounded-[1.65rem] border border-emerald-700/20 pointer-events-none" />
+          <div className="relative flex items-center justify-center gap-10 sm:gap-16">
+            <button type="button" onClick={handleDrawCard} disabled={!isMyTurn() || imSpectating}
+              className={`relative flex flex-col items-center gap-1 ${isMyTurn() && !imSpectating ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-80'} transition-transform`}>
+              <CardBack deck className={isMyTurn() && !imSpectating ? 'border-emerald-400/50' : 'border-white/15'} />
+              <span className="text-[10px] text-emerald-200/70 tabular-nums font-medium">
+                Draw {typeof gameState.drawPile === 'number' ? `· ${gameState.drawPile}` : ''}
+              </span>
+            </button>
 
-          <div className="relative">
-            {gameState.topCard && <Card card={gameState.topCard} />}
-            <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold uppercase
-              ${gameState.currentColor === 'red' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                gameState.currentColor === 'blue' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                gameState.currentColor === 'green' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
-              {gameState.currentColor}
+            <div className="relative">
+              {gameState.topCard && <Card card={gameState.topCard} />}
+              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold uppercase
+                ${gameState.currentColor === 'red' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                  gameState.currentColor === 'blue' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                  gameState.currentColor === 'green' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                  'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
+                {gameState.currentColor}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Turn Indicator */}
-      <div className="relative z-10 text-center py-1">
+      <div className="relative z-10 text-center py-2 shrink-0">
         <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold
-          ${isMyTurn() ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+          ${imSpectating ? 'bg-amber-500/15 text-amber-200/90 border border-amber-500/25'
+            : isMyTurn() ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                        : 'bg-white/5 text-gray-400 border border-white/10'}`}>
-          <div className={`w-2 h-2 rounded-full ${isMyTurn() ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-          {isMyTurn() ? 'Your turn' : `${currentPlayerName}'s turn`}
+          <div className={`w-2 h-2 rounded-full ${imSpectating ? 'bg-amber-400' : isMyTurn() ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+          {imSpectating ? 'Spectating' : isMyTurn() ? 'Your turn' : `${currentPlayerName}'s turn`}
         </div>
-        {gameState.pendingRoulette && (
-          <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-            <span>R</span>
-            <span>Waiting for roulette color from {rouletteTargetName || 'next player'}</span>
-          </div>
-        )}
+        <p className="mt-1.5 text-[10px] text-gray-500">
+          Shortcuts: <kbd className="rounded bg-white/10 px-1">U</kbd> call UNO ·{' '}
+          <kbd className="rounded bg-white/10 px-1">C</kbd> catch UNO
+        </p>
       </div>
 
       {/* Player Hand */}
-      <div className="relative z-10 flex-shrink-0">
-        <div className="flex items-center justify-center gap-3 pb-2">
+      <div className="relative z-10 flex-shrink-0 pb-safe">
+        <div className="flex items-center justify-center gap-3 pb-2 flex-wrap">
           {hand.length <= 2 && (
-            <button onClick={handleSayUno}
+            <button type="button" onClick={handleSayUno}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold text-base px-5 py-2 rounded-full
                 transition-all duration-200">
               UNO
@@ -401,33 +492,70 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
           )}
           <div className="bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400">{hand.length} cards</div>
         </div>
-        <div className="glass-dark mx-2 mb-2 rounded-t-2xl py-3 min-h-[160px] flex items-center justify-center">
-          <PlayerHand cards={hand} onPlayCard={handlePlayCard} isMyTurn={isMyTurn()} playableCards={getPlayableCards()} />
+        <div className="glass-dark mx-2 mb-2 rounded-t-2xl py-2 min-h-[180px] flex items-end justify-center overflow-visible">
+          <PlayerHand
+            cards={hand}
+            onPlayCard={handlePlayCard}
+            isMyTurn={isMyTurn() && !imSpectating}
+            playableCards={getPlayableCards()}
+          />
         </div>
+      </div>
+
+        </div>
+        <GameRulesPanel
+          className="self-stretch"
+          mobileOpen={rulesDrawerOpen}
+          onMobileOpenChange={setRulesDrawerOpen}
+        />
       </div>
 
       <AnimatePresence>
         {showColorPicker && (
           <ColorPicker
             onSelectColor={handleColorChoice}
-            title={rouletteSelectionPending ? 'Choose Roulette Color' : 'Choose a Color'}
-            subtitle={
-              rouletteSelectionPending
-                ? 'You were targeted by Wild Roulette. Pick the color to resolve the draw.'
-                : 'Select the color for your wild card'
+            title={
+              pendingCard?.type === 'wild_color_roulette'
+                ? 'Wild Color Roulette'
+                : pendingSwapTargetId
+                  ? 'Choose color after swap'
+                  : 'Choose a Color'
             }
-            allowCancel={!rouletteSelectionPending}
+            subtitle={
+              pendingCard?.type === 'wild_color_roulette'
+                ? 'Pick the color the next player must reveal until they draw from the pile.'
+                : pendingSwapTargetId
+                  ? 'Pick the active color for the discard pile after swapping hands.'
+                  : 'Select the color for your wild card (including Reverse +4).'
+            }
+            allowCancel
             onClose={() => {
-              if (!rouletteSelectionPending) {
-                setShowColorPicker(false);
-                setPendingCard(null);
-              }
+              setShowColorPicker(false);
+              setPendingCard(null);
+              setPendingSwapTargetId(null);
             }}
           />
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {showSwapPicker && <SwapPicker opponents={opponents} onSelectPlayer={handleSwapChoice} onClose={() => { setShowSwapPicker(false); setPendingCard(null); }} />}
+        {showSwapPicker && (
+          <SwapPicker
+            title={pendingSevenCard ? '7 plus swap' : 'Swap Hands'}
+            subtitle={
+              pendingSevenCard
+                ? 'Choose a player to swap your entire hand with.'
+                : 'Choose a player to swap hands with.'
+            }
+            opponents={opponents.filter((o) => !o.knockedOut)}
+            onSelectPlayer={handleSwapChoice}
+            onClose={() => {
+              setShowSwapPicker(false);
+              setPendingCard(null);
+              setPendingSwapTargetId(null);
+              setPendingSevenCard(null);
+            }}
+          />
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {gameOver && <GameOverModal winner={winner} players={gameState.players} onLeave={onLeave} />}

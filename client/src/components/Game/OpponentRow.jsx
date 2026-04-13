@@ -8,6 +8,7 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
       {opponents.map((opponent, idx) => {
         const isCurrentPlayer = players[currentPlayerIndex]?.id === opponent.id;
         const hasOneCard = opponent.cardCount === 1;
+        const isOut = opponent.knockedOut;
 
         return (
           <motion.div
@@ -16,11 +17,12 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
             className={`glass p-3 sm:p-4 min-w-[140px] sm:min-w-[180px] transition-all duration-300
-              ${isCurrentPlayer 
+              ${isOut ? 'opacity-60 border-white/10' : ''}
+              ${isCurrentPlayer && !isOut
                 ? 'border-yellow-500/50 shadow-lg shadow-yellow-500/10 bg-yellow-500/5' 
                 : ''
               }
-              ${hasOneCard ? 'border-red-500/50' : ''}
+              ${hasOneCard && !isOut ? 'border-red-500/50' : ''}
             `}
           >
             {/* Player Info */}
@@ -34,15 +36,17 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{opponent.username}</p>
-                <p className={`text-xs ${isCurrentPlayer ? 'text-yellow-400' : 'text-gray-500'}`}>
-                  {isCurrentPlayer ? '🎯 Playing...' : `${opponent.cardCount} cards`}
+                <p className={`text-xs ${isOut ? 'text-amber-400/90' : isCurrentPlayer ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  {isOut ? 'Out (Mercy)' : isCurrentPlayer ? 'Playing…' : `${opponent.cardCount} cards`}
                 </p>
               </div>
             </div>
 
             {/* Cards */}
             <div className="flex items-center gap-0.5 justify-center">
-              {opponent.cardCount <= 7 ? (
+              {isOut ? (
+                <span className="text-xs text-gray-500">—</span>
+              ) : opponent.cardCount <= 7 ? (
                 Array(opponent.cardCount).fill(null).map((_, i) => (
                   <div key={i} style={{ marginLeft: i === 0 ? 0 : '-6px' }}>
                     <CardBack small />
@@ -63,7 +67,7 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
             </div>
 
             {/* UNO Warning */}
-            {hasOneCard && !opponent.saidUno && (
+            {hasOneCard && !isOut && !opponent.saidUno && (
               <motion.button
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -78,7 +82,7 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
               </motion.button>
             )}
 
-            {hasOneCard && opponent.saidUno && (
+            {hasOneCard && !isOut && opponent.saidUno && (
               <div className="mt-2 text-center">
                 <span className="text-xs text-red-400 font-bold animate-pulse">
                   🔴 UNO!

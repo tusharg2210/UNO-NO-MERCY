@@ -2,7 +2,7 @@ import { createDeck, shuffleDeck, calculateHandPoints } from './card.js';
 import {
     canPlayCard, canStackDraw, getDrawAmount, requiresColorChoice, isValidColor, validatePlayAction,
 } from './validators.js';
-import { CARD_TYPES, COLORS } from '../utils/constants.js';
+import { CARD_TYPES, COLORS, LIMITS } from '../utils/constants.js';
 import { logger } from '../utils/logger.js';
 
 class GameManager {
@@ -30,6 +30,7 @@ class GameManager {
       winnerUsername: null,
       round: 1,
       pendingRoulette: null,
+      mercyReserve: [],
       gameLog: [],
       settings: {
         maxPlayers: settings.maxPlayers || 6,
@@ -147,6 +148,7 @@ class GameManager {
 
     // Create and shuffle deck
     game.drawPile = shuffleDeck(createDeck());
+    game.mercyReserve = [];
     game.status = 'playing';
     game.startedAt = new Date();
 
@@ -187,9 +189,6 @@ class GameManager {
   playCard(roomCode, playerId, cardId, chosenColor = null, swapTargetId = null) {
     const game = this.games.get(roomCode);
     if (!game) return { success: false, error: 'Game not found.' };
-    if (game.pendingRoulette) {
-      return { success: false, error: 'Wild roulette color selection is pending.' };
-    }
 
     // Validate action
     const validation = validatePlayAction(game, playerId, cardId);
@@ -198,24 +197,41 @@ class GameManager {
     const { card, cardIndex } = validation;
     const currentPlayer = game.players[game.currentPlayerIndex];
 
-    // Validate color choice for wild cards only.
-    if (requiresColorChoice(card)) {
-      if (!chosenColor || !isValidColor(chosenColor)) {
-        return { success: false, error: 'Must choose a valid color.' };
-      }
-    }
-    if (card.type === CARD_TYPES.NUMBER && card.value === 7 && !swapTargetId) {
-      return { success: false, error: 'You must choose a player to swap hands with on 7.' };
-    }
+    let effectiveSwapId = swapTargetId;
     if (
       (card.type === CARD_TYPES.NUMBER && card.value === 7) ||
       card.type === CARD_TYPES.SWAP_HANDS
     ) {
+      const others = game.players.filter(
+        p => p.id !== currentPlayer.id && this.isPlayerActive(p)
+      );
+      if (others.length === 1) {
+        effectiveSwapId = others[0].id;
+      }
+      if (!effectiveSwapId) {
+        return {
+          success: false,
+          error:
+            card.type === CARD_TYPES.SWAP_HANDS
+              ? 'Choose a player to swap hands with.'
+              : 'You must choose a player to swap hands with on 7.',
+        };
+      }
       const swapTarget = game.players.find(
-        p => p.id === swapTargetId && p.id !== currentPlayer.id && p.connected && !p.knockedOut
+        p =>
+          p.id === effectiveSwapId &&
+          p.id !== currentPlayer.id &&
+          this.isPlayerActive(p)
       );
       if (!swapTarget) {
         return { success: false, error: 'Invalid swap target.' };
+      }
+    }
+
+    // Validate color choice for wild cards only.
+    if (requiresColorChoice(card)) {
+      if (!chosenColor || !isValidColor(chosenColor)) {
+        return { success: false, error: 'Must choose a valid color.' };
       }
     }
 
@@ -225,7 +241,7 @@ class GameManager {
     currentPlayer.cardsPlayed++;
 
     // Process card effects
-    const effects = this.processCardEffect(game, card, chosenColor, swapTargetId);
+    const effects = this.processCardEffect(game, card, chosenColor, effectiveSwapId);
     const mercyState = this.applyMercyRule(game);
     if (mercyState.knockedOutPlayers.length > 0) {
       effects.knockedOutPlayers = mercyState.knockedOutPlayers;
@@ -234,7 +250,7 @@ class GameManager {
     // Add to game log
     this.addLog(game, 'play_card', currentPlayer.username, card, {
       chosenColor,
-      swapTargetId,
+      swapTargetId: effectiveSwapId,
       effects: effects.message,
     });
 
@@ -246,8 +262,8 @@ class GameManager {
     const mercyWin = this.resolveMercyWin(game, effects);
     if (mercyWin) return mercyWin;
 
-    // Check win condition
-    if (currentPlayer.hand.length === 0) {
+    // Check win condition (mercy knockout clears the hand — that is not a win)
+    if (!currentPlayer.knockedOut && currentPlayer.hand.length === 0) {
       return this.handleWin(game, currentPlayer, effects);
     }
 
@@ -285,20 +301,26 @@ class GameManager {
         }
         break;
 
-      case CARD_TYPES.SKIP:
+      case CARD_TYPES.SKIP: {
         game.currentColor = card.color;
+        const skippedIdx = this.getNextPlayerIndex(game);
+        const skippedName = game.players[skippedIdx].username;
         this.nextTurn(game);
+        if (this.getActivePlayers(game).length === 2) {
+          this.nextTurn(game);
+        }
         effects.skipNext = true;
-        effects.message = `🚫 ${game.players[game.currentPlayerIndex].username} was skipped!`;
+        effects.message = `Skip: ${skippedName} loses this turn`;
         effects.type = 'skip';
         break;
+      }
 
       case CARD_TYPES.REVERSE:
         game.direction *= -1;
         game.currentColor = card.color;
         effects.message = `🔄 Direction reversed!`;
         effects.type = 'reverse';
-        if (game.players.length === 2) {
+        if (this.getActivePlayers(game).length === 2) {
           this.nextTurn(game);
           effects.skipNext = true;
         }
@@ -377,11 +399,11 @@ class GameManager {
 
       case CARD_TYPES.REVERSE_DRAW_FOUR:
         game.direction *= -1;
-        game.drawStack += 4;
         game.currentColor = chosenColor;
+        game.drawStack += 4;
         this.resolveDrawStack(game);
         effects.skipNext = true;
-        effects.message = `🔥 Reverse + Draw 4! Color: ${chosenColor}`;
+        effects.message = `Reverse + Draw 4! Color: ${chosenColor}`;
         effects.type = 'no_mercy';
         break;
 
@@ -403,17 +425,16 @@ class GameManager {
       }
 
       case CARD_TYPES.WILD_COLOR_ROULETTE: {
-        const targetIndex = this.getNextPlayerIndex(game);
-        const targetPlayer = game.players[targetIndex];
-        game.pendingRoulette = {
-          targetPlayerId: targetPlayer.id,
-          targetPlayerIndex: targetIndex,
-          playedBy: game.players[game.currentPlayerIndex].id,
-        };
-        game.currentPlayerIndex = targetIndex;
-        effects.message = `🎰 Wild Roulette played! ${targetPlayer.username} must choose a color.`;
-        effects.rouletteTarget = targetPlayer.id;
-        effects.type = 'roulette_pending';
+        const nextIndex = this.getNextPlayerIndex(game);
+        const rouletteResult = this.resolveColorRouletteForPlayer(game, nextIndex, chosenColor);
+        game.currentColor = chosenColor;
+        game.currentPlayerIndex = nextIndex;
+        this.nextTurn(game);
+        effects.message = `Roulette (${String(chosenColor).toUpperCase()}): ${rouletteResult.targetUsername} drew ${rouletteResult.drawnCount} cards`;
+        effects.type = 'no_mercy';
+        effects.rouletteColor = chosenColor;
+        effects.rouletteTarget = rouletteResult.targetId;
+        effects.rouletteDrawnCount = rouletteResult.drawnCount;
         effects.skipNext = true;
         break;
       }
@@ -448,6 +469,10 @@ class GameManager {
     this.drawCards(game, nextIndex, game.drawStack);
     game.drawStack = 0;
     this.applyMercyRule(game);
+    const stillIn = this.getActivePlayers(game);
+    if (stillIn.length <= 1) {
+      return;
+    }
     game.currentPlayerIndex = nextIndex;
     this.nextTurn(game);
   }
@@ -473,15 +498,14 @@ class GameManager {
   drawCard(roomCode, playerId) {
     const game = this.games.get(roomCode);
     if (!game) return { success: false, error: 'Game not found.' };
-    if (game.pendingRoulette) {
-      return { success: false, error: 'Choose roulette color before drawing.' };
-    }
-
     if (game.status !== 'playing') {
       return { success: false, error: 'Game is not in progress.' };
     }
 
     const currentPlayer = game.players[game.currentPlayerIndex];
+    if (currentPlayer.knockedOut) {
+      return { success: false, error: 'You are out of the game (Mercy rule).' };
+    }
     if (currentPlayer.id !== playerId) {
       return { success: false, error: 'Not your turn.' };
     }
@@ -509,7 +533,10 @@ class GameManager {
         drawCount,
       };
     }
-    this.nextTurn(game);
+    const drawerKnockedOut = mercyState.knockedOutPlayers.some(k => k.id === playerId);
+    if (!drawerKnockedOut) {
+      this.nextTurn(game);
+    }
 
     return {
       success: true,
@@ -560,9 +587,8 @@ class GameManager {
     if (!target || !catcher) return { success: false, error: 'Player not found.' };
 
     if (target.hand.length === 1 && !target.saidUno) {
-      // Penalty: draw 4 cards
       const targetIndex = game.players.findIndex(p => p.id === targetPlayerId);
-      const drawnCards = this.drawCards(game, targetIndex, 4);
+      const drawnCards = this.drawCards(game, targetIndex, LIMITS.UNO_PENALTY_CARDS);
       const mercyState = this.applyMercyRule(game);
       const mercyWin = this.resolveMercyWin(game, {
         skipNext: false,
@@ -581,7 +607,7 @@ class GameManager {
 
       this.addLog(game, 'catch_uno', catcher.username, null, {
         caught: target.username,
-        penalty: 4,
+        penalty: LIMITS.UNO_PENALTY_CARDS,
       });
 
       return {
@@ -597,45 +623,6 @@ class GameManager {
     return { success: false, error: 'Cannot catch this player.' };
   }
 
-  chooseRouletteColor(roomCode, playerId, chosenColor) {
-    const game = this.games.get(roomCode);
-    if (!game) return { success: false, error: 'Game not found.' };
-    if (!game.pendingRoulette) {
-      return { success: false, error: 'No roulette choice is pending.' };
-    }
-    if (game.pendingRoulette.targetPlayerId !== playerId) {
-      return { success: false, error: 'Only the next player can choose roulette color.' };
-    }
-    if (!isValidColor(chosenColor)) {
-      return { success: false, error: 'Must choose a valid color.' };
-    }
-
-    const targetIndex = game.pendingRoulette.targetPlayerIndex;
-    const rouletteResult = this.resolveColorRouletteForPlayer(game, targetIndex, chosenColor);
-    game.currentColor = chosenColor;
-    game.pendingRoulette = null;
-
-    const effects = {
-      skipNext: true,
-      type: 'no_mercy',
-      message: `🎰 Roulette (${chosenColor.toUpperCase()}): ${rouletteResult.targetUsername} drew ${rouletteResult.drawnCount} cards`,
-      rouletteColor: chosenColor,
-      rouletteTarget: rouletteResult.targetId,
-      rouletteDrawnCount: rouletteResult.drawnCount,
-    };
-
-    const mercyState = this.applyMercyRule(game);
-    if (mercyState.knockedOutPlayers.length > 0) {
-      effects.knockedOutPlayers = mercyState.knockedOutPlayers;
-    }
-
-    const mercyWin = this.resolveMercyWin(game, effects);
-    if (mercyWin) return mercyWin;
-
-    this.nextTurn(game);
-    return { success: true, game, effects };
-  }
-
   // ========================
   // TURN MANAGEMENT
   // ========================
@@ -647,8 +634,8 @@ class GameManager {
   nextTurn(game) {
     game.currentPlayerIndex = this.getNextPlayerIndex(game);
 
-    // Reset UNO state for new current player
     const currentPlayer = game.players[game.currentPlayerIndex];
+    if (!currentPlayer) return;
     if (currentPlayer.hand.length !== 1) {
       currentPlayer.saidUno = false;
     }
@@ -728,15 +715,12 @@ class GameManager {
       topCard: game.discardPile[game.discardPile.length - 1],
       discardPileCount: game.discardPile.length,
       drawPile: game.drawPile.length,
+      mercyReserveCount: game.mercyReserve?.length ?? 0,
       currentPlayerIndex: game.currentPlayerIndex,
       direction: game.direction,
       currentColor: game.currentColor,
       drawStack: game.drawStack,
-      pendingRoulette: game.pendingRoulette
-        ? {
-            targetPlayerId: game.pendingRoulette.targetPlayerId,
-          }
-        : null,
+      pendingRoulette: null,
       status: game.status,
       settings: game.settings,
       round: game.round,
@@ -852,24 +836,54 @@ class GameManager {
     };
   }
 
+  /**
+   * Mercy: at 25+ cards, player is out; their hand is shuffled back into the draw pile now.
+   * If only one active player remains (e.g. 2-player game), resolveMercyWin ends the game.
+   */
   applyMercyRule(game) {
     const knockedOutPlayers = [];
     for (const player of game.players) {
-      if (!player.knockedOut && player.hand.length > 25) {
+      if (!player.knockedOut && player.hand.length >= 25) {
+        const count = player.hand.length;
+        const returned = [...player.hand];
+        player.hand = [];
         player.knockedOut = true;
+        if (returned.length > 0) {
+          game.drawPile = shuffleDeck([...game.drawPile, ...returned]);
+        }
         knockedOutPlayers.push({
           id: player.id,
           username: player.username,
-          cards: player.hand.length,
+          cards: count,
         });
       }
+    }
+    if (knockedOutPlayers.length > 0) {
+      if (game.mercyReserve?.length) {
+        game.drawPile = shuffleDeck([...game.drawPile, ...game.mercyReserve]);
+        game.mercyReserve = [];
+      }
+      this.ensureCurrentPlayerActive(game);
     }
     return { knockedOutPlayers };
   }
 
+  /** If the current player is knocked out, advance to the next active player. */
+  ensureCurrentPlayerActive(game) {
+    if (game.status !== 'playing') return;
+    let guard = 0;
+    while (
+      guard++ < game.players.length &&
+      !this.isPlayerActive(game.players[game.currentPlayerIndex])
+    ) {
+      game.currentPlayerIndex = this.getNextPlayablePlayerIndex(game, game.currentPlayerIndex);
+    }
+  }
+
   resolveMercyWin(game, effects) {
+    if (game.status !== 'playing') return null;
     const activePlayers = this.getActivePlayers(game);
-    if (game.status === 'playing' && activePlayers.length === 1) {
+    if (activePlayers.length === 1) {
       return this.handleWin(game, activePlayers[0], effects);
     }
     return null;

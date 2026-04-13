@@ -9,11 +9,11 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'https://uno-no-mercy-wq92.onrender.com', // ✅ FIXED
+        target: 'https://uno-no-mercy-wq92.onrender.com',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'https://uno-no-mercy-wq92.onrender.com', // ✅ FIXED
+        target: 'https://uno-no-mercy-wq92.onrender.com', 
         ws: true,
         changeOrigin: true,
       },

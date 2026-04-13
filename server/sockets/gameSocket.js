@@ -86,38 +86,6 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
   });
 
   // ========================
-  // CHOOSE ROULETTE COLOR
-  // ========================
-  socket.on('choose-roulette-color', ({ roomCode, chosenColor }) => {
-    try {
-      const result = gameManager.chooseRouletteColor(roomCode, socket.id, chosenColor);
-
-      if (!result.success) {
-        socket.emit('error', { message: result.error });
-        return;
-      }
-
-      const game = result.game;
-      game.players.forEach(player => {
-        if (player.connected) {
-          io.to(player.id).emit('card-played', {
-            hand: player.hand,
-            gameState: gameManager.sanitizeForPlayer(game, player.id),
-            effects: result.effects,
-            gameOver: result.gameOver || false,
-            winner: result.winner || null,
-            winnerUsername: result.winnerUsername || null,
-            scores: result.scores || null,
-          });
-        }
-      });
-    } catch (error) {
-      logger.error(`Choose roulette color error: ${error.message}`);
-      socket.emit('error', { message: 'Failed to choose roulette color.' });
-    }
-  });
-
-  // ========================
   // SAY UNO
   // ========================
   socket.on('say-uno', ({ roomCode }) => {
@@ -250,6 +218,7 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
       oldGame.currentColor = null;
       oldGame.drawStack = 0;
       oldGame.pendingRoulette = null;
+      oldGame.mercyReserve = [];
       oldGame.winner = null;
       oldGame.winnerUsername = null;
       oldGame.round += 1;

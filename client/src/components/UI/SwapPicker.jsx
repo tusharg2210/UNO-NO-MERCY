@@ -1,7 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const SwapPicker = ({ opponents, onSelectPlayer, onClose }) => {
+const SwapPicker = ({
+  opponents,
+  onSelectPlayer,
+  onClose,
+  title = 'Swap Hands',
+  subtitle = 'Choose a player to swap hands with',
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -20,8 +26,8 @@ const SwapPicker = ({ opponents, onSelectPlayer, onClose }) => {
       >
         <div className="text-center mb-6">
           <span className="text-4xl mb-2 block">🔀</span>
-          <h3 className="text-2xl font-bold">Swap Hands</h3>
-          <p className="text-gray-400 text-sm mt-1">Choose a player to swap hands with</p>
+          <h3 className="text-2xl font-bold">{title}</h3>
+          <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
         </div>
 
         <div className="space-y-3">

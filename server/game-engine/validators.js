@@ -6,9 +6,14 @@ import { CARD_TYPES, COLORS, STACKABLE_DRAW_TYPES } from '../utils/constants.js'
 export function canPlayCard(game, card) {
   const topCard = game.discardPile[game.discardPile.length - 1];
 
-  // If there's a draw stack, only stackable draw cards can be played
+  // If there's a draw stack, only stackable draw cards of equal or higher value can be played
   if (game.drawStack > 0) {
-    return canStackDraw(card);
+    if (!canStackDraw(card)) return false;
+    const topCard = game.discardPile[game.discardPile.length - 1];
+    const topAmt = getDrawAmount(topCard.type);
+    const cardAmt = getDrawAmount(card.type);
+    if (!topAmt) return true;
+    return cardAmt >= topAmt;
   }
 
   // Wild cards can always be played
@@ -70,10 +75,6 @@ export function isValidColor(color) {
  * Check if game state is valid for a play action
  */
 export function validatePlayAction(game, playerId, cardId) {
-  if (game.pendingRoulette) {
-    return { valid: false, error: 'Wild roulette color selection is pending.' };
-  }
-
   // Check game is in progress
   if (game.status !== 'playing') {
     return { valid: false, error: 'Game is not in progress.' };
@@ -85,7 +86,7 @@ export function validatePlayAction(game, playerId, cardId) {
     return { valid: false, error: 'Not your turn.' };
   }
   if (currentPlayer.knockedOut) {
-    return { valid: false, error: 'You are knocked out by the Mercy rule.' };
+    return { valid: false, error: 'You are out (25+ cards). Spectate until the game ends.' };
   }
 
   // Check card exists in player's hand

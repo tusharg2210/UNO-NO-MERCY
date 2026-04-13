@@ -96,6 +96,29 @@ export function createDeck() {
     deck.push({ id: id++, type: CARD_TYPES.WILD_COLOR_ROULETTE, color: null, value: 'wild_color_roulette' });
   }
 
+  // --- Expansion to 168 cards (full No Mercy deck) ---
+  for (let i = 0; i < 4; i++) {
+    deck.push({ id: id++, type: CARD_TYPES.SWAP_HANDS, color: null, value: 'swap_hands' });
+  }
+  COLORS.forEach(color => {
+    deck.push({ id: id++, type: CARD_TYPES.DRAW_FOUR, color, value: 'draw_four' });
+    deck.push({ id: id++, type: CARD_TYPES.DRAW_TWO, color, value: 'draw_two' });
+    deck.push({ id: id++, type: CARD_TYPES.REVERSE, color, value: 'reverse' });
+    deck.push({ id: id++, type: CARD_TYPES.SKIP, color, value: 'skip' });
+    deck.push({ id: id++, type: CARD_TYPES.DISCARD_ALL, color, value: 'discard_all' });
+  });
+  for (let i = 0; i < 2; i++) {
+    deck.push({ id: id++, type: CARD_TYPES.WILD, color: null, value: 'wild' });
+    deck.push({ id: id++, type: CARD_TYPES.WILD_DRAW_FOUR, color: null, value: 'wild_draw_four' });
+    deck.push({ id: id++, type: CARD_TYPES.REVERSE_DRAW_FOUR, color: null, value: 'reverse_draw_four' });
+    deck.push({ id: id++, type: CARD_TYPES.WILD_DRAW_SIX, color: null, value: 'wild_draw_six' });
+    deck.push({ id: id++, type: CARD_TYPES.WILD_DRAW_TEN, color: null, value: 'wild_draw_ten' });
+    deck.push({ id: id++, type: CARD_TYPES.WILD_COLOR_ROULETTE, color: null, value: 'wild_color_roulette' });
+  }
+  for (let i = 0; i < 2; i++) {
+    deck.push({ id: id++, type: CARD_TYPES.SWAP_HANDS, color: null, value: 'swap_hands' });
+  }
+
   return deck;
 }
 
