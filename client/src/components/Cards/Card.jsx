@@ -39,11 +39,13 @@ const Card = ({ card, onClick, playable = false, index = 0, small = false }) => 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 50, rotate: Math.random() * 20 - 10 }}
-      animate={{ opacity: 1, y: 0, rotate: 0 }}
-      transition={{ delay: index * 0.05, type: 'spring', stiffness: 200 }}
-      whileHover={playable ? { y: -30, scale: 1.15, zIndex: 50 } : {}}
-      whileTap={playable ? { scale: 0.95 } : {}}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.02, duration: 0.12, ease: 'easeOut' }}
+      whileHover={playable ? { y: -16, scale: 1.06, zIndex: 50 } : {}}
+      whileTap={playable ? { scale: 0.98 } : {}}
+      whileHoverTransition={{ duration: 0.1, ease: 'easeOut' }}
+      whileTapTransition={{ duration: 0.08, ease: 'easeOut' }}
       onClick={() => playable && onClick?.(card)}
       className={`
         ${small ? 'w-14 h-20' : 'w-20 h-28 sm:w-24 sm:h-36'}
@@ -53,30 +55,22 @@ const Card = ({ card, onClick, playable = false, index = 0, small = false }) => 
           ? 'border-white/40 cursor-pointer hover:border-white hover:shadow-xl hover:shadow-white/25' 
           : 'border-white/20 opacity-70 cursor-not-allowed'
         }
-        ${isNoMercy ? 'ring-2 ring-red-400/60' : ''}
+        
         flex flex-col items-center justify-center
         relative overflow-hidden select-none
         card-shadow transition-all duration-200
       `}
     >
       <div className="absolute inset-1 rounded-xl border border-white/25 pointer-events-none" />
-
-      {/* No Mercy indicator */}
-      {isNoMercy && (
-        <div className="absolute top-0 left-0 right-0 bg-red-600/80 text-[6px] sm:text-[8px] 
-                        text-center font-bold tracking-wider py-0.5">
-          NO MERCY
-        </div>
-      )}
-
+     
       {/* Center value */}
-      <span className={`${small ? 'text-sm' : 'text-xl sm:text-3xl'} font-black text-white tracking-wide drop-shadow-lg`}>
+      <span className={`${small ? 'text-sm' : 'text-xl sm:text-sm'} font-black text-white tracking-wide drop-shadow-lg`}>
         {display}
       </span>
 
       {/* Type label */}
       <span className={`${small ? 'text-[5px]' : 'text-[7px] sm:text-[9px]'} text-white/70 
-                        uppercase tracking-[0.18em] mt-1 font-semibold`}>
+                        uppercase mt-1 font-semibold px-3`}>
         {config.shortLabel}
       </span>
 

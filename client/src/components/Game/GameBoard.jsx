@@ -11,6 +11,9 @@ import OpponentRow from './OpponentRow.jsx';
 import GameOverModal from '../UI/GameOverModal.jsx';
 import EffectsBanner from '../UI/EffectsBanner.jsx';
 
+// LOGO 
+import logo from '../../assets/UNO_Logo.svg';
+
 const GameBoard = ({ roomCode, user, onLeave }) => {
   const { socket, isConnected } = useSocket();
   const [gameState, setGameState] = useState(null);
@@ -351,12 +354,10 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
         <div className="flex items-center gap-8 sm:gap-16">
           <button onClick={handleDrawCard} disabled={!isMyTurn()}
             className={`relative ${isMyTurn() ? 'cursor-pointer hover:scale-110' : 'cursor-not-allowed'} transition-transform`}>
-            <div className="relative w-20 h-28 sm:w-24 sm:h-36 rounded-xl bg-gradient-to-br from-red-800 via-red-900 to-black 
-              border-2 ${isMyTurn() ? 'border-white/40' : 'border-white/20'} flex flex-col items-center justify-center card-shadow">
-              <span className="text-white/60 font-black text-xs tracking-widest">UNO</span>
-              <span className="text-white/40 text-[10px] mt-1">DRAW</span>
+            <div className="relative w-20 h-28 sm:w-24 sm:h-36 rounded-xl bg-black
+              border-2 ${isMyTurn() ? 'border-white/40' : 'border-white/10'} flex flex-col items-center justify-center card-shadow">
+                <img src={logo} alt="UNO Logo" className="w-20 h-20" />
             </div>
-            <p className="text-center text-xs text-gray-500 mt-2">{gameState.drawPile} cards</p>
           </button>
 
           <div className="relative">
