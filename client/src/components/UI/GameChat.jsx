@@ -14,7 +14,7 @@ const QUICK_MESSAGES = [
 ];
 
 const GameChat = ({ roomCode, username, isOpen, onToggle }) => {
-  const socket = useSocket();
+  const { socket } = useSocket();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [unread, setUnread] = useState(0);
@@ -41,7 +41,7 @@ const GameChat = ({ roomCode, username, isOpen, onToggle }) => {
 
   const sendMessage = (msg) => {
     const message = msg || input.trim();
-    if (!message) return;
+    if (!message || !socket) return;
 
     socket.emit('chat-message', { roomCode, username, message });
     setInput('');
