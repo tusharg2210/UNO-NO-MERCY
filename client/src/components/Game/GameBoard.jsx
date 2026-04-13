@@ -32,30 +32,38 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     const timer = setTimeout(() => {
       if (!gameState) {
         setLoadingTimeout(true);
-        console.error('⏰ Game loading timed out. No game-started event received.');
       }
     }, 15000); // 15 second timeout
 
     return () => clearTimeout(timer);
   }, [gameState]);
 
-  // ⚠️ FIX: Request game state on mount
+  // Rejoin after refresh or Socket.IO reconnect during an active match
   useEffect(() => {
-    if (!socket || !roomCode) return;
+    if (!socket || !roomCode || !user) return;
 
-    console.log('📤 Requesting game state for room:', roomCode);
+    const payload = () => ({
+      roomCode,
+      username: user.username,
+      userId: user.id,
+    });
 
-    // Try to get game state in case we missed the event
-    socket.emit('get-game-state', { roomCode });
-  }, [socket, roomCode]);
+    const tryRejoin = () => socket.emit('reconnect-game', payload());
+
+    socket.on('connect', tryRejoin);
+    if (socket.connected) tryRejoin();
+
+    return () => socket.off('connect', tryRejoin);
+  }, [socket, roomCode, user]);
 
   useEffect(() => {
     if (!socket) return;
 
     const handleGameStarted = ({ hand, gameState }) => {
-      console.log('🎮 game-started received!', { handSize: hand?.length, gameState: !!gameState });
       setHand(hand || []);
       setGameState(gameState);
+      setGameOver(false);
+      setWinner(null);
       setLoadingTimeout(false);
       toast('Game started', {
         icon: '',
@@ -64,14 +72,12 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     };
 
     const handleGameStateUpdate = ({ hand, gameState }) => {
-      console.log('📦 game-state-update received!');
       if (hand) setHand(hand);
       if (gameState) setGameState(gameState);
       setLoadingTimeout(false);
     };
 
     const handleCardPlayed = ({ hand, gameState, effects, gameOver: isOver, winner: w, winnerUsername }) => {
-      console.log('🃏 card-played received!');
       setHand(hand || []);
       setGameState(gameState);
       if (effects?.message) {
@@ -84,10 +90,18 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
       }
     };
 
-    const handleCardDrawn = ({ hand, gameState }) => {
-      console.log('📥 card-drawn received!');
+    const handleCardDrawn = ({
+      hand,
+      gameState,
+      gameOver: isOver,
+      winner: w,
+    }) => {
       setHand(hand || []);
       setGameState(gameState);
+      if (isOver) {
+        setGameOver(true);
+        setWinner(w);
+      }
     };
 
     const handleUnoCalled = ({ username }) => {
@@ -97,9 +111,20 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
       });
     };
 
-    const handleUnoCaught = ({ hand, gameState, catcher, caught }) => {
+    const handleUnoCaught = ({
+      hand,
+      gameState,
+      catcher,
+      caught,
+      gameOver: isOver,
+      winner: w,
+    }) => {
       setHand(hand || []);
       setGameState(gameState);
+      if (isOver) {
+        setGameOver(true);
+        setWinner(w);
+      }
       toast(`${catcher} caught ${caught}. +2 cards`, {
         icon: '',
         style: { background: '#DC2626', color: '#fff' },
@@ -107,11 +132,20 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     };
 
     const handleError = ({ message }) => {
-      console.error('❌ Game error:', message);
       toast.error(message);
     };
 
-    // ⚠️ FIX: Listen for ALL relevant events
+
+
+    const handleReconnected = ({ hand, gameState: gs }) => {
+      if (hand) setHand(hand);
+      if (gs) setGameState(gs);
+      setLoadingTimeout(false);
+    };
+
+    const handlePeerReconnected = ({ username }) => {
+      toast(`${username} reconnected`, { icon: '' });
+    };
     socket.on('game-started', handleGameStarted);
     socket.on('game-state-update', handleGameStateUpdate);
     socket.on('card-played', handleCardPlayed);
@@ -121,11 +155,16 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     socket.on('player-disconnected', ({ username }) => {
       toast(`${username} disconnected`, { icon: '' });
     });
-    socket.on('game-over', ({ winnerUsername, reason }) => {
+    socket.on('game-over', ({ winner: w, winnerUsername, reason, gameState: gs, hand: h }) => {
+      if (gs) setGameState(gs);
+      if (h !== undefined) setHand(h);
       setGameOver(true);
+      if (w != null) setWinner(w);
       toast(`Game over. ${winnerUsername} wins (${reason})`, { icon: '' });
     });
     socket.on('error', handleError);
+    socket.on('reconnected', handleReconnected);
+    socket.on('player-reconnected', handlePeerReconnected);
 
     return () => {
       socket.off('game-started', handleGameStarted);
@@ -137,6 +176,8 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
       socket.off('player-disconnected');
       socket.off('game-over');
       socket.off('error', handleError);
+      socket.off('reconnected', handleReconnected);
+      socket.off('player-reconnected', handlePeerReconnected);
     };
   }, [socket]);
 
@@ -158,8 +199,8 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
       if (!card.color) return true;
       if (card.type === 'discard_all') return card.color === gameState.currentColor;
       return card.color === gameState.currentColor ||
-             card.value === topCard?.value ||
-             card.type === topCard?.type;
+        card.value === topCard?.value ||
+        card.type === topCard?.type;
     });
   }, [gameState, hand, isMyTurn]);
 
@@ -245,15 +286,16 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
     setShowColorPicker(true);
   };
 
-  const handleDrawCard = () => {
+  const handleDrawCard = useCallback(() => {
+    if (!socket || !roomCode || !gameState) return;
     if (!isMyTurn()) return;
-    const me = gameState?.players.find((p) => p.id === socket?.id);
+    const me = gameState.players.find((p) => p.id === socket.id);
     if (me?.knockedOut) {
       toast.error('You are out of this game.');
       return;
     }
     socket.emit('draw-card', { roomCode });
-  };
+  }, [socket, roomCode, gameState, isMyTurn]);
 
   const handleSayUno = useCallback(() => {
     if (!socket || !roomCode) return;
@@ -271,6 +313,7 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (gameOver) return;
       const k = e.key.toLowerCase();
       if (k === 'u') {
         e.preventDefault();
@@ -293,30 +336,27 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
         if (target) handleCatchUno(target.id);
         else toast('No one to catch right now.', { icon: '' });
       }
+      if (k === 'd') {
+        e.preventDefault();
+        handleDrawCard();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [gameState, socket, hand.length, handleSayUno, handleCatchUno]);
+  }, [gameState, socket, hand.length, handleSayUno, handleCatchUno, handleDrawCard, gameOver]);
 
-  // ⚠️ FIX: Better loading screen with debug info
   if (!gameState) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
-        <div className="text-center animate-fade-in max-w-md mx-auto p-6">
+      <div className="flex min-h-[100dvh] items-center justify-center overflow-x-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)] px-4">
+        <div className="animate-fade-in mx-auto max-w-md p-6 text-center">
           <div className="text-4xl mb-4 font-semibold tracking-wide text-slate-200">UNO</div>
           <p className="text-gray-300 text-lg mb-2">Loading game...</p>
-          
-          {/* Connection Debug Info */}
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex items-center justify-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className={isConnected ? 'text-green-400' : 'text-red-400'}>
-                {isConnected ? 'Connected to server' : 'Not connected'}
-              </span>
-            </div>
-            <p className="text-gray-500 text-xs">
-              Room: {roomCode} | Socket: {socket?.id || 'none'}
-            </p>
+
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className={isConnected ? 'text-green-400' : 'text-red-400'}>
+              {isConnected ? 'Connected to server' : 'Not connected'}
+            </span>
           </div>
 
           {/* Progress bar */}
@@ -377,130 +417,149 @@ const GameBoard = ({ roomCode, user, onLeave }) => {
   const currentPlayerName = gameState.players[gameState.currentPlayerIndex]?.username;
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
-      <div className="flex flex-1 w-full max-w-[1920px] mx-auto min-h-0">
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
-      {/* Top Bar */}
-      <div className="relative z-20 flex items-center justify-between px-4 py-2 glass-dark mx-2 mt-2 rounded-xl shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={onLeave}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
-            ← Leave
-          </button>
-          <span className="text-sm text-gray-400">Room: <span className="text-white font-mono">{roomCode}</span></span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            type="button"
-            className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35 hover:bg-amber-500/30 transition-colors"
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches) {
-                document.getElementById('game-rules-aside')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-              } else {
-                setRulesDrawerOpen(true);
-              }
-            }}
-          >
-            Rules
-          </button>
-          <div className="flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full">
-            <span className={`text-lg ${gameState.direction === 1 ? '' : 'scale-x-[-1]'} inline-block`}>↻</span>
-            <span className="text-xs text-gray-400">{gameState.direction === 1 ? 'CW' : 'CCW'}</span>
+    <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)] pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1920px] flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+          {/* Top Bar */}
+          <div className="relative z-20 mx-2 mt-2 flex shrink-0 flex-col gap-2 rounded-xl glass-dark px-2 py-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between sm:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <button onClick={onLeave}
+                className="shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white">
+                ← Leave
+              </button>
+              <span className="min-w-0 truncate text-xs text-gray-400 min-[380px]:text-sm">
+                <span className="hidden min-[400px]:inline">Room: </span>
+                <span className="font-mono text-white">{roomCode}</span>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-[480px]:justify-end">
+              <button
+                type="button"
+                className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35 hover:bg-amber-500/30 transition-colors"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches) {
+                    document.getElementById('game-rules-aside')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  } else {
+                    setRulesDrawerOpen(true);
+                  }
+                }}
+              >
+                Rules
+              </button>
+              <div className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 sm:px-3">
+                <span className={`inline-block text-base sm:text-lg ${gameState.direction === 1 ? '' : 'scale-x-[-1]'}`}>↻</span>
+                <span className="hidden text-xs text-gray-400 sm:inline">{gameState.direction === 1 ? 'CW' : 'CCW'}</span>
+              </div>
+              {gameState.drawStack > 0 && (
+                <div
+                  className="bg-gradient-to-r from-red-700/90 to-orange-700/85 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold text-white border border-orange-400/40 shadow-lg shadow-red-900/30 animate-pulse tabular-nums"
+                  title="Total cards the next player must draw if they do not stack"
+                >
+                  Stack +{gameState.drawStack}
+                </div>
+              )}
+              <div className={`w-6 h-6 rounded-full border-2 border-white/30 ${gameState.currentColor === 'red' ? 'bg-red-500' :
+                  gameState.currentColor === 'blue' ? 'bg-blue-500' :
+                    gameState.currentColor === 'green' ? 'bg-green-500' : 'bg-yellow-500'
+                }`} />
+            </div>
           </div>
-          {gameState.drawStack > 0 && (
-            <div className="bg-red-600/80 px-3 py-1 rounded-full text-sm font-bold animate-pulse">
-              +{gameState.drawStack}
+
+          <AnimatePresence>{effects && <EffectsBanner effects={effects} />}</AnimatePresence>
+
+          {imSpectating && (
+            <div className="relative z-20 mx-2 mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-xs leading-snug text-amber-100 sm:mx-4 sm:text-sm">
+              You are out (Mercy: 25+ cards). Your cards were shuffled back into the draw pile. You can watch until the game ends.
             </div>
           )}
-          <div className={`w-6 h-6 rounded-full border-2 border-white/30 ${
-            gameState.currentColor === 'red' ? 'bg-red-500' :
-            gameState.currentColor === 'blue' ? 'bg-blue-500' :
-            gameState.currentColor === 'green' ? 'bg-green-500' : 'bg-yellow-500'
-          }`} />
-        </div>
-      </div>
 
-      <AnimatePresence>{effects && <EffectsBanner effects={effects} />}</AnimatePresence>
+          {/* Opponents */}
+          <div className="relative z-10 flex-shrink-0 px-2 py-2 sm:px-4 sm:py-3">
+            <OpponentRow opponents={opponents} currentPlayerIndex={gameState.currentPlayerIndex}
+              players={gameState.players} onCatchUno={handleCatchUno} />
+          </div>
 
-      {imSpectating && (
-        <div className="relative z-20 mx-4 mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-100">
-          You are out (Mercy: 25+ cards). Your cards were shuffled back into the draw pile. You can watch until the game ends.
-        </div>
-      )}
+          {/* Table — draw & discard */}
+          <div className="relative z-10 flex min-h-[180px] flex-1 items-center justify-center px-2 py-3 sm:px-3 sm:py-4">
+            <div
+              className="relative w-full max-w-xl rounded-3xl border border-emerald-800/50 bg-gradient-to-b from-emerald-950 via-emerald-950/92 to-[#042f1f] px-4 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_25px_50px_rgba(0,0,0,0.45)] sm:rounded-[2rem] sm:px-8 sm:py-10"
+            >
+              <div className="absolute inset-2 rounded-[1.65rem] border border-emerald-700/20 pointer-events-none" />
+              {gameState.drawStack > 0 && (
+                <div className="relative z-10 flex justify-center px-2 mb-1 sm:mb-2">
+                  <div className="rounded-2xl border-2 border-orange-400/60 bg-gradient-to-b from-red-950/95 via-neutral-950/92 to-neutral-950/95 px-4 sm:px-6 py-2.5 text-center shadow-[0_12px_40px_rgba(185,28,28,0.25)] max-w-[min(100%,20rem)]">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-200/95">Draw stack</p>
+                    <p className="text-2xl sm:text-3xl font-black tabular-nums text-white leading-tight mt-0.5">
+                      +{gameState.drawStack} <span className="text-sm sm:text-base font-bold text-white/80">cards</span>
+                    </p>
+                    <p className="text-[10px] text-white/55 mt-1 leading-snug">
+                      Keeps growing while players stack +2 / +4 / wild draws; resets when someone draws.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="relative flex w-full flex-col items-center justify-center gap-8 min-[420px]:flex-row min-[420px]:gap-10 sm:gap-16">
+                <button type="button" onClick={handleDrawCard} disabled={!isMyTurn() || imSpectating}
+                  className={`relative flex flex-col items-center gap-1 ${isMyTurn() && !imSpectating ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-80'} transition-transform`}>
+                  <CardBack deck className={isMyTurn() && !imSpectating ? 'border-emerald-400/50' : 'border-white/15'} />
+                  <span className="max-w-[8rem] text-center text-[10px] font-medium tabular-nums text-emerald-200/70 min-[420px]:max-w-[6.5rem]">
+                    {gameState.drawStack > 0 ? (
+                      <>Draw stack · +{gameState.drawStack}</>
+                    ) : (
+                      <>Draw {typeof gameState.drawPile === 'number' ? `· ${gameState.drawPile}` : ''}</>
+                    )}
+                  </span>
+                </button>
+                {gameState.topCard && <Card card={gameState.topCard} />}
 
-      {/* Opponents */}
-      <div className="relative z-10 flex-shrink-0 px-4 py-3">
-        <OpponentRow opponents={opponents} currentPlayerIndex={gameState.currentPlayerIndex}
-          players={gameState.players} onCatchUno={handleCatchUno} />
-      </div>
-
-      {/* Table — draw & discard */}
-      <div className="flex-1 flex items-center justify-center relative z-10 px-3 py-4 min-h-[200px]">
-        <div
-          className="relative w-full max-w-xl rounded-[2rem] border border-emerald-800/50 
-          bg-gradient-to-b from-emerald-950 via-emerald-950/92 to-[#042f1f] 
-          shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_25px_50px_rgba(0,0,0,0.45)] px-8 py-10"
-        >
-          <div className="absolute inset-2 rounded-[1.65rem] border border-emerald-700/20 pointer-events-none" />
-          <div className="relative flex items-center justify-center gap-10 sm:gap-16">
-            <button type="button" onClick={handleDrawCard} disabled={!isMyTurn() || imSpectating}
-              className={`relative flex flex-col items-center gap-1 ${isMyTurn() && !imSpectating ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-80'} transition-transform`}>
-              <CardBack deck className={isMyTurn() && !imSpectating ? 'border-emerald-400/50' : 'border-white/15'} />
-              <span className="text-[10px] text-emerald-200/70 tabular-nums font-medium">
-                Draw {typeof gameState.drawPile === 'number' ? `· ${gameState.drawPile}` : ''}
-              </span>
-            </button>
-
-            <div className="relative">
-              {gameState.topCard && <Card card={gameState.topCard} />}
-              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold uppercase
-                ${gameState.currentColor === 'red' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                  gameState.currentColor === 'blue' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                  gameState.currentColor === 'green' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                  'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
-                {gameState.currentColor}
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Turn Indicator */}
-      <div className="relative z-10 text-center py-2 shrink-0">
-        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold
+          {/* Turn Indicator */}
+          <div className="relative z-10 shrink-0 px-2 py-2 text-center">
+            <div className={`inline-flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold sm:px-4 sm:text-sm
           ${imSpectating ? 'bg-amber-500/15 text-amber-200/90 border border-amber-500/25'
-            : isMyTurn() ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                       : 'bg-white/5 text-gray-400 border border-white/10'}`}>
-          <div className={`w-2 h-2 rounded-full ${imSpectating ? 'bg-amber-400' : isMyTurn() ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-          {imSpectating ? 'Spectating' : isMyTurn() ? 'Your turn' : `${currentPlayerName}'s turn`}
-        </div>
-        <p className="mt-1.5 text-[10px] text-gray-500">
-          Shortcuts: <kbd className="rounded bg-white/10 px-1">U</kbd> call UNO ·{' '}
-          <kbd className="rounded bg-white/10 px-1">C</kbd> catch UNO
-        </p>
-      </div>
+                : isMyTurn() ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-white/5 text-gray-400 border border-white/10'}`}>
+              <div className={`h-2 w-2 shrink-0 rounded-full ${imSpectating ? 'bg-amber-400' : isMyTurn() ? 'animate-pulse bg-green-500' : 'bg-gray-600'}`} />
+              <span className="min-w-0 truncate">
+                {imSpectating ? 'Spectating' : isMyTurn() ? 'Your turn' : `${currentPlayerName}'s turn`}
+              </span>
+            </div>
+            {!imSpectating && (
+              <p className="mt-1.5 hidden text-[10px] text-gray-500 sm:block">
+                Shortcuts: <kbd className="rounded bg-white/10 px-1">D</kbd> draw ·{' '}
+                <kbd className="rounded bg-white/10 px-1">U</kbd> UNO ·{' '}
+                <kbd className="rounded bg-white/10 px-1">C</kbd> catch UNO
+              </p>
+            )}
+          </div>
 
-      {/* Player Hand */}
-      <div className="relative z-10 flex-shrink-0 pb-safe">
-        <div className="flex items-center justify-center gap-3 pb-2 flex-wrap">
-          {hand.length <= 2 && (
-            <button type="button" onClick={handleSayUno}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold text-base px-5 py-2 rounded-full
+          {/* Player Hand */}
+          <div
+            className="relative z-10 flex-shrink-0"
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+          >
+            <div className="flex flex-wrap items-center justify-center gap-2 px-2 pb-2 sm:gap-3">
+              {!imSpectating && hand.length <= 2 && (
+                <button type="button" onClick={handleSayUno}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold text-base px-5 py-2 rounded-full
                 transition-all duration-200">
-              UNO
-            </button>
-          )}
-          <div className="bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400">{hand.length} cards</div>
-        </div>
-        <div className="glass-dark mx-2 mb-2 rounded-t-2xl py-2 min-h-[180px] flex items-end justify-center overflow-visible">
-          <PlayerHand
-            cards={hand}
-            onPlayCard={handlePlayCard}
-            isMyTurn={isMyTurn() && !imSpectating}
-            playableCards={getPlayableCards()}
-          />
-        </div>
-      </div>
+                  UNO
+                </button>
+              )}
+              <div className="bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400">{hand.length} cards</div>
+            </div>
+            <div className="glass-dark mx-1 mb-1 flex min-h-[140px] items-end justify-center overflow-visible rounded-t-2xl py-2 min-[400px]:mx-2 min-[400px]:mb-2 min-[400px]:min-h-[180px]">
+              <PlayerHand
+                cards={hand}
+                onPlayCard={handlePlayCard}
+                isMyTurn={isMyTurn() && !imSpectating}
+                playableCards={getPlayableCards()}
+              />
+            </div>
+          </div>
 
         </div>
         <GameRulesPanel

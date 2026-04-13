@@ -3,12 +3,97 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
-    @apply bg-slate-950 text-slate-100 font-sans;
+    @apply bg-slate-950 text-slate-100 font-sans overflow-x-hidden;
+  }
+  #root {
+    min-height: 100dvh;
+    min-height: 100vh;
   }
 }
 
 @layer components {
+  /* Landing / lobby — sleek glass + glow */
+  .landing-shell {
+    @apply min-h-screen min-h-[100dvh] relative overflow-x-hidden text-slate-100;
+    background:
+      radial-gradient(ellipse 90% 65% at 50% -25%, rgba(244, 63, 94, 0.14), transparent 55%),
+      radial-gradient(ellipse 55% 45% at 100% 15%, rgba(99, 102, 241, 0.18), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 0% 70%, rgba(34, 211, 238, 0.08), transparent 45%),
+      radial-gradient(ellipse 40% 35% at 85% 85%, rgba(234, 179, 8, 0.06), transparent 40%),
+      linear-gradient(180deg, #070a12 0%, #03050a 55%, #020308 100%);
+  }
+  /* Auth homepage — neutral, minimal */
+  .auth-shell {
+    @apply min-h-screen min-h-[100dvh] relative overflow-x-hidden text-zinc-100;
+    background:
+      radial-gradient(ellipse 65% 40% at 50% -10%, rgba(255, 255, 255, 0.04), transparent 55%),
+      linear-gradient(180deg, #0c0c0e 0%, #080809 45%, #050506 100%);
+  }
+  .auth-input {
+    @apply w-full rounded-xl border border-zinc-800/90 bg-zinc-950/40 px-4 py-3 text-base font-medium
+      text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:bg-zinc-950/70
+      focus:ring-1 focus:ring-zinc-500/25 focus:outline-none transition-all duration-200;
+  }
+  .auth-card {
+    @apply rounded-2xl border border-zinc-800/80 bg-zinc-950/40 backdrop-blur-xl
+      shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset,0_24px_48px_-20px_rgba(0,0,0,0.7)];
+  }
+  .auth-btn-primary {
+    @apply rounded-xl font-semibold text-sm sm:text-base px-5 py-3.5 transition-all duration-200
+      disabled:opacity-40 disabled:pointer-events-none focus:outline-none focus-visible:ring-2
+      focus-visible:ring-zinc-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950
+      bg-zinc-100 text-zinc-950 hover:bg-white active:scale-[0.98];
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  }
+  .auth-btn-secondary {
+    @apply rounded-xl font-semibold text-sm sm:text-base px-5 py-3.5 transition-all duration-200
+      disabled:opacity-40 disabled:pointer-events-none focus:outline-none focus-visible:ring-2
+      focus-visible:ring-zinc-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950
+      border border-zinc-700/80 bg-zinc-900/30 text-zinc-200 hover:bg-zinc-800/40 hover:border-zinc-600 active:scale-[0.98];
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  }
+  .chunky-card {
+    @apply rounded-2xl border border-white/[0.08] bg-slate-900/35 backdrop-blur-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_20px_50px_-15px_rgba(0,0,0,0.65)];
+  }
+  .chunky-btn {
+    @apply rounded-xl font-semibold text-sm sm:text-base tracking-tight px-5 py-3.5 transition-all duration-200
+      disabled:opacity-40 disabled:pointer-events-none focus:outline-none focus-visible:ring-2
+      focus-visible:ring-cyan-400/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050810]
+      hover:brightness-110 active:scale-[0.98];
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 12px 32px -8px rgba(0, 0, 0, 0.55);
+  }
+  .chunky-btn:active:not(:disabled) {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 6px 16px -6px rgba(0, 0, 0, 0.45);
+  }
+  .chunky-input {
+    @apply w-full rounded-xl border border-slate-700/70 bg-slate-950/40 px-4 py-3 text-base font-medium
+      text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/45 focus:bg-slate-950/55
+      focus:ring-1 focus:ring-cyan-500/25 focus:outline-none transition-all duration-200;
+  }
+  .uno-stripe {
+    background: linear-gradient(
+      90deg,
+      #f43f5e 0%,
+      #f43f5e 25%,
+      #eab308 25%,
+      #eab308 50%,
+      #22c55e 50%,
+      #22c55e 75%,
+      #3b82f6 75%,
+      #3b82f6 100%
+    );
+    box-shadow: 0 0 24px rgba(244, 63, 94, 0.15), 0 0 48px rgba(59, 130, 246, 0.1);
+  }
   .card-shadow {
     box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
   }

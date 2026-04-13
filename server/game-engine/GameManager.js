@@ -33,7 +33,7 @@ class GameManager {
       mercyReserve: [],
       gameLog: [],
       settings: {
-        maxPlayers: settings.maxPlayers || 6,
+        maxPlayers: settings.maxPlayers || LIMITS.MAX_PLAYERS,
         cardsPerHand: settings.cardsPerHand || 7,
         drawStackEnabled: settings.drawStackEnabled !== false,
         noMercyMode: settings.noMercyMode !== false,
@@ -107,32 +107,105 @@ class GameManager {
 
     this.addLog(game, 'player_leave', player.username);
 
-    // If game is waiting, remove player entirely
     if (game.status === 'waiting') {
       game.players.splice(playerIndex, 1);
+      if (game.players.length === 0) {
+        this.removeGame(roomCode);
+        return { removed: true };
+      }
+      if (game.hostId === playerId && game.players[0]) {
+        game.hostId = game.players[0].id;
+      }
+      return { game };
     }
 
-    // If all players disconnected, remove game
+    if (game.status === 'playing') {
+      const handBack = [...player.hand];
+      player.hand = [];
+      if (handBack.length > 0) {
+        game.drawPile = shuffleDeck([...game.drawPile, ...handBack]);
+      }
+
+      const wasCurrentTurn = game.currentPlayerIndex === playerIndex;
+      game.players.splice(playerIndex, 1);
+
+      if (game.players.length === 0) {
+        this.removeGame(roomCode);
+        return { removed: true };
+      }
+
+      if (wasCurrentTurn) {
+        game.currentPlayerIndex =
+          playerIndex >= game.players.length ? 0 : playerIndex;
+      } else if (playerIndex < game.currentPlayerIndex) {
+        game.currentPlayerIndex--;
+      }
+
+      const n = game.players.length;
+      game.currentPlayerIndex = ((game.currentPlayerIndex % n) + n) % n;
+
+      if (game.hostId === playerId && game.players[0]) {
+        game.hostId = game.players[0].id;
+      }
+
+      if (n === 1) {
+        return this.handleWin(game, game.players[0], {
+          skipNext: true,
+          type: 'disconnect',
+          message: 'Opponent disconnected — you win!',
+        });
+      }
+
+      this.ensureCurrentPlayerActive(game);
+      return { game };
+    }
+
     const connectedPlayers = game.players.filter(p => p.connected);
-    const activePlayers = game.players.filter(p => this.isPlayerActive(p));
     if (connectedPlayers.length === 0) {
       this.removeGame(roomCode);
       return { removed: true };
     }
 
-    // If only 1 player left in active game, they win
-    if (game.status === 'playing' && activePlayers.length === 1) {
-      game.status = 'finished';
-      game.winner = activePlayers[0].id;
-      game.winnerUsername = activePlayers[0].username;
-      return { game, gameOver: true, winner: activePlayers[0] };
-    }
-
-    // Adjust current player index if needed
     if (game.status === 'playing' && game.currentPlayerIndex >= game.players.length) {
       game.currentPlayerIndex = 0;
     }
 
+    return { game };
+  }
+
+  /**
+   * Socket dropped (tab close, network) while a match is in progress: keep the seat and hand
+   * so the same player can call reconnect-game with a new socket id.
+   * Does not remove the player from the room.
+   * Lobby / waiting rooms still use removePlayer() so the seat opens for others.
+   */
+  markPlayerDisconnected(roomCode, socketId) {
+    const game = this.games.get(roomCode);
+    if (!game) return null;
+
+    const playerIndex = game.players.findIndex((p) => p.id === socketId);
+    if (playerIndex === -1) return null;
+
+    if (game.status !== 'playing') {
+      return this.removePlayer(roomCode, socketId);
+    }
+
+    const player = game.players[playerIndex];
+    player.connected = false;
+    this.addLog(game, 'player_disconnect', player.username);
+
+    const notKnocked = game.players.filter((p) => !p.knockedOut);
+    const stillIn = notKnocked.filter((p) => p.connected);
+    if (notKnocked.length === 2 && stillIn.length === 1) {
+      const winner = stillIn[0];
+      return this.handleWin(game, winner, {
+        skipNext: true,
+        type: 'disconnect',
+        message: 'Opponent disconnected — you win!',
+      });
+    }
+
+    this.ensureCurrentPlayerActive(game);
     return { game };
   }
 
@@ -882,9 +955,9 @@ class GameManager {
 
   resolveMercyWin(game, effects) {
     if (game.status !== 'playing') return null;
-    const activePlayers = this.getActivePlayers(game);
-    if (activePlayers.length === 1) {
-      return this.handleWin(game, activePlayers[0], effects);
+    const survivors = game.players.filter(p => !p.knockedOut);
+    if (survivors.length === 1) {
+      return this.handleWin(game, survivors[0], effects);
     }
     return null;
   }

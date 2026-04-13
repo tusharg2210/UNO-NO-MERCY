@@ -68,7 +68,7 @@ const Card = ({ card, onClick, playable = false, index = 0, small = false }) => 
       whileTap={playable ? { scale: 0.98 } : {}}
       onClick={() => playable && onClick?.(card)}
       className={`
-        ${small ? 'w-14 h-20' : 'w-[4.75rem] h-[7.25rem] sm:w-24 sm:h-36'}
+        ${small ? 'w-14 h-20' : 'w-[4.1rem] h-[6.35rem] min-[400px]:w-[4.75rem] min-[400px]:h-[7.25rem] sm:w-24 sm:h-36'}
         ${colorClass}
         rounded-2xl border-2
         ${playable

@@ -1,5 +1,13 @@
 import { generateRoomCode } from '../utils/generateRoomCode.js';
 import { logger } from '../utils/logger.js';
+import { LIMITS } from '../utils/constants.js';
+import { saveGameToDatabase, updatePlayerStats } from './gameSocket.js';
+
+function lobbyMaxPlayers(game) {
+  const n = game?.settings?.maxPlayers;
+  if (typeof n === 'number' && n >= LIMITS.MIN_PLAYERS && n <= LIMITS.MAX_PLAYERS) return n;
+  return LIMITS.MAX_PLAYERS;
+}
 
 export function setupLobbySocket(io, socket, connectedUsers, gameManager) {
 
@@ -43,9 +51,10 @@ export function setupLobbySocket(io, socket, connectedUsers, gameManager) {
       // Track connected user
       connectedUsers.set(socket.id, { username, roomCode, userId });
 
-      // Send response
+      // Send response (top-level maxPlayers so the lobby UI does not depend on nested settings)
       socket.emit('room-created', {
         roomCode,
+        maxPlayers: lobbyMaxPlayers(result.game),
         game: gameManager.sanitizeForPlayer(result.game, socket.id),
       });
 
@@ -96,11 +105,13 @@ export function setupLobbySocket(io, socket, connectedUsers, gameManager) {
       // Notify the joining player
       socket.emit('room-joined', {
         roomCode,
+        maxPlayers: lobbyMaxPlayers(result.game),
         game: gameManager.sanitizeForPlayer(result.game, socket.id),
       });
 
       // Notify all players in room
       io.to(roomCode).emit('player-joined', {
+        maxPlayers: lobbyMaxPlayers(result.game),
         game: gameManager.sanitizeForPlayer(result.game, socket.id),
         username,
         playerCount: result.game.players.length,
@@ -132,18 +143,40 @@ export function setupLobbySocket(io, socket, connectedUsers, gameManager) {
       // Notify player
       socket.emit('room-left');
 
-      // Notify remaining players
       if (result && !result.removed) {
         io.to(roomCode).emit('player-left', {
           username: userData.username,
           game: result.game ? gameManager.sanitizeForPlayer(result.game, null) : null,
         });
 
-        if (result.gameOver) {
-          io.to(roomCode).emit('game-over', {
-            winner: result.winner.id,
-            winnerUsername: result.winner.username,
-            reason: 'All other players left',
+        if (result.gameOver && result.game) {
+          saveGameToDatabase(result.game, result.scores);
+          updatePlayerStats(result.game, result.winner);
+          const winId = typeof result.winner === 'object' ? result.winner.id : result.winner;
+          result.game.players.forEach((p) => {
+            if (p.connected) {
+              const gameState = gameManager.sanitizeForPlayer(result.game, p.id);
+              io.to(p.id).emit('game-state-update', {
+                hand: p.hand,
+                gameState,
+              });
+              io.to(p.id).emit('game-over', {
+                winner: winId,
+                winnerUsername: result.winnerUsername,
+                reason: 'Opponent left the game',
+                gameState,
+                hand: p.hand,
+              });
+            }
+          });
+        } else if (result.game && result.game.status === 'playing') {
+          result.game.players.forEach((p) => {
+            if (p.connected) {
+              io.to(p.id).emit('game-state-update', {
+                hand: p.hand,
+                gameState: gameManager.sanitizeForPlayer(result.game, p.id),
+              });
+            }
           });
         }
       }

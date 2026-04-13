@@ -4,7 +4,7 @@ import CardBack from '../Cards/CardBack';
 
 const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => {
   return (
-    <div className="flex justify-center gap-4 flex-wrap">
+    <div className="flex flex-wrap justify-center gap-2 sm:gap-4">
       {opponents.map((opponent, idx) => {
         const isCurrentPlayer = players[currentPlayerIndex]?.id === opponent.id;
         const hasOneCard = opponent.cardCount === 1;
@@ -16,7 +16,7 @@ const OpponentRow = ({ opponents, currentPlayerIndex, players, onCatchUno }) => 
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className={`glass p-3 sm:p-4 min-w-[140px] sm:min-w-[180px] transition-all duration-300
+            className={`glass w-[10.25rem] max-w-[min(100%,calc(50vw-0.75rem))] shrink-0 p-2.5 transition-all duration-300 min-[400px]:w-44 sm:w-[11.25rem] sm:max-w-none sm:p-4
               ${isOut ? 'opacity-60 border-white/10' : ''}
               ${isCurrentPlayer && !isOut
                 ? 'border-yellow-500/50 shadow-lg shadow-yellow-500/10 bg-yellow-500/5' 

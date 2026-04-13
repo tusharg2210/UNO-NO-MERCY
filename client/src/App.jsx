@@ -18,12 +18,15 @@ function AppContent() {
   };
 
   const handleLeaveGame = () => {
+    if (socket && roomCode) {
+      socket.emit('leave-room', { roomCode });
+    }
     setGameStarted(false);
     setRoomCode('');
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
       {/* ⚠️ Show connection status */}
       <ConnectionStatus 
         isConnected={isConnected} 
@@ -33,9 +36,10 @@ function AppContent() {
       {!user ? (
         <AuthPage onAuth={setUser} />
       ) : !gameStarted ? (
-        <Lobby 
-          user={user} 
-          onGameStart={handleGameStart} 
+        <Lobby
+          user={user}
+          onGameStart={handleGameStart}
+          onSignOut={() => setUser(null)}
         />
       ) : (
         <GameBoard 

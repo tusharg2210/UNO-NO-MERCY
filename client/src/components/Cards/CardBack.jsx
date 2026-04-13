@@ -3,7 +3,11 @@ import logo from '../../assets/UNO_Logo.svg';
 
 const CardBack = ({ small = false, deck = false, className = '' }) => {
   const size =
-    small ? 'w-8 h-12 rounded-xl' : deck ? 'w-20 h-28 sm:w-24 sm:h-36 rounded-2xl' : 'w-14 h-20 rounded-xl';
+    small
+      ? 'w-8 h-12 rounded-xl'
+      : deck
+        ? 'w-[4.5rem] h-[6.75rem] rounded-2xl sm:w-20 sm:h-28 md:w-24 md:h-36'
+        : 'w-14 h-20 rounded-xl';
   return (
     <div
       className={`
@@ -21,7 +25,7 @@ const CardBack = ({ small = false, deck = false, className = '' }) => {
         src={logo}
         alt=""
         className={`${
-          small ? 'w-5 h-5' : deck ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-10 h-10'
+          small ? 'w-5 h-5' : deck ? 'w-10 h-10 sm:w-16 sm:h-16 md:w-20 md:h-20' : 'w-10 h-10'
         } object-contain opacity-95`}
         draggable={false}
       />

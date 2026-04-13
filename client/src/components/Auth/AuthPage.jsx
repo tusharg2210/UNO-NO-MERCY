@@ -3,173 +3,217 @@ import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '../../utils/serverUrl.js';
 
 const AuthPage = ({ onAuth }) => {
-const [isLogin, setIsLogin] = useState(true);
-const [formData, setFormData] = useState({
-username: '',
-email: '',
-password: '',
-});
-const [loading, setLoading] = useState(false);
-
-const handleSubmit = async (e) => {
-e.preventDefault();
-
-
-// ✅ Basic validation
-if (!formData.email || !formData.password) {
-  return toast.error('Please fill all required fields');
-}
-
-if (!isLogin && !formData.username) {
-  return toast.error('Username is required');
-}
-
-setLoading(true);
-
-try {
-  const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-
-  const res = await fetch(`${getApiBaseUrl()}${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(formData),
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [quickPlayName, setQuickPlayName] = useState('');
 
-  let data;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.email || !formData.password) {
+      return toast.error('Please fill all required fields');
+    }
+    if (!isLogin && !formData.username) {
+      return toast.error('Username is required');
+    }
+    setLoading(true);
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+      const res = await fetch(`${getApiBaseUrl()}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server error. Please try again.');
+      }
+      if (!res.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+      localStorage.setItem('token', data.token);
+      toast.success(isLogin ? 'Welcome back' : 'Account created');
+      onAuth(data.user);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  try {
-    data = await res.json();
-  } catch {
-    throw new Error('Server error. Please try again.');
-  }
+  const handleQuickPlay = () => {
+    const name = quickPlayName.trim();
+    if (!name) {
+      toast.error('Enter your name to use Quick Play');
+      return;
+    }
+    if (name.length > 32) {
+      toast.error('Name must be 32 characters or less');
+      return;
+    }
+    onAuth({
+      id: Date.now(),
+      username: name,
+      isGuest: true,
+    });
+    toast.success(`Playing as ${name}`);
+  };
 
-  if (!res.ok) {
-    throw new Error(data.error || 'Something went wrong');
-  }
+  return (
+    <div
+      className="auth-shell flex min-h-[100dvh] flex-col items-center justify-center p-4 sm:p-8"
+      style={{
+        paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+        paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.025]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        }}
+      />
 
-  // ✅ Store token
-  localStorage.setItem('token', data.token);
+      <div className="relative z-10 w-full min-w-0 max-w-md">
+        <div className="mx-auto mb-10 h-px w-12 bg-zinc-700" />
 
-  toast.success(isLogin ? 'Welcome back' : 'Account created');
+        <div className="mb-8 text-center sm:mb-10">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">
+            Stack · Draw · No mercy
+          </p>
+          <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-tight">
+            UNO <span className="text-zinc-400">No Mercy</span>
+          </h1>
+          <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
+            Open a room, share a code, play in the browser.
+          </p>
+        </div>
 
-  onAuth(data.user);
-} catch (err) {
-  toast.error(err.message);
-} finally {
-  setLoading(false);
-}
-
-
-};
-
-// ⚡ Quick Play
-const handleQuickPlay = () => {
-const randomName = `Player_${Math.random().toString(36).substring(2, 6)}`;
-
-
-onAuth({
-  id: Date.now(),
-  username: randomName,
-  isGuest: true,
-});
-
-toast.success(`Playing as ${randomName}`);
-
-
-};
-
-return (
-  <div className="min-h-screen flex items-center justify-center p-4">
-    <div className="glass w-full max-w-md p-8 animate-fade-in relative z-10">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight text-slate-100">UNO No Mercy</h1>
-        <p className="text-slate-400 text-sm mt-2">Sign in to join a room and start playing</p>
-      </div>
-
-      <div className="flex bg-slate-800/70 rounded-lg p-1 mb-6">
-        <button
-          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all duration-200
-            ${isLogin ? 'bg-slate-100 text-slate-900' : 'text-slate-300 hover:text-white'}`}
-          onClick={() => setIsLogin(true)}
-        >
-          Login
-        </button>
-        <button
-          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all duration-200
-            ${!isLogin ? 'bg-slate-100 text-slate-900' : 'text-slate-300 hover:text-white'}`}
-          onClick={() => setIsLogin(false)}
-        >
-          Register
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {!isLogin && (
-          <div className="animate-slide-down">
-            <label className="block text-sm text-slate-400 mb-1">Username</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="Enter username"
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              required={!isLogin}
-            />
+        <div className="auth-card p-6 sm:p-8">
+          <div className="flex gap-1 rounded-xl bg-zinc-950/80 p-1 ring-1 ring-zinc-800/80">
+            <button
+              type="button"
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
+                isLogin
+                  ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-zinc-700/80'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              onClick={() => setIsLogin(true)}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
+                !isLogin
+                  ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-zinc-700/80'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              onClick={() => setIsLogin(false)}
+            >
+              Register
+            </button>
           </div>
-        )}
 
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">Email</label>
-          <input
-            type="email"
-            className="input-field"
-            placeholder="Enter email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            required
-          />
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {!isLogin && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-zinc-500">Username</label>
+                <input
+                  type="text"
+                  className="auth-input"
+                  placeholder="Your name on the table"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  required={!isLogin}
+                />
+              </div>
+            )}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-500">Email</label>
+              <input
+                type="email"
+                className="auth-input"
+                placeholder="you@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-500">Password</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder="••••••••"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+              />
+            </div>
+            <button type="submit" disabled={loading} className="auth-btn-primary w-full">
+              {loading ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-zinc-900" />
+                  Hang tight…
+                </span>
+              ) : isLogin ? (
+                'Enter the lobby'
+              ) : (
+                'Create account'
+              )}
+            </button>
+          </form>
+
+          <div className="my-8 flex items-center gap-4">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-600">or</span>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+
+          <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 p-5 sm:p-6">
+            <label htmlFor="quick-play-name" className="mb-1.5 block text-xs font-medium text-zinc-500">
+              Quick play
+            </label>
+            <input
+              id="quick-play-name"
+              type="text"
+              className="auth-input mb-3"
+              placeholder="Display name"
+              value={quickPlayName}
+              onChange={(e) => setQuickPlayName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleQuickPlay();
+                }
+              }}
+              maxLength={32}
+              autoComplete="nickname"
+            />
+            <p className="mb-4 text-xs leading-relaxed text-zinc-600">
+              No password. You can register later if you want an account.
+            </p>
+            <button type="button" onClick={handleQuickPlay} className="auth-btn-secondary w-full">
+              Continue as guest
+            </button>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">Password</label>
-          <input
-            type="password"
-            className="input-field"
-            placeholder="Enter password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary w-full flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-100 rounded-full animate-spin" />
-          ) : (
-            isLogin ? 'Login' : 'Register'
-          )}
-        </button>
-      </form>
-
-      <div className="flex items-center gap-4 my-6">
-        <div className="flex-1 h-px bg-slate-700" />
-        <span className="text-slate-500 text-sm">OR</span>
-        <div className="flex-1 h-px bg-slate-700" />
+        <p className="mt-8 text-center text-[11px] font-medium text-zinc-700">
+          Draw stacks add up fast. Have fun.
+        </p>
       </div>
-
-      <button
-        onClick={handleQuickPlay}
-        className="w-full py-3 px-8 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 font-medium hover:bg-slate-800 transition-all duration-200"
-      >
-        Quick Play (No Account)
-      </button>
     </div>
-  </div>
-);
+  );
 };
 
 export default AuthPage;

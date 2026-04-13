@@ -8,6 +8,7 @@ import 'dotenv/config';
 
 // Config & Utils
 import connectDB from './config/db.js';
+import { LIMITS } from './utils/constants.js';
 import { logger } from './utils/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -104,6 +105,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV,
+    /** Present on builds that support 10-seat lobbies; missing on older deploys. */
+    maxLobbyPlayers: LIMITS.MAX_PLAYERS,
   });
 });
 

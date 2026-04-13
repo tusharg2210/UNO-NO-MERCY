@@ -79,6 +79,11 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
           });
         }
       });
+
+      if (result.gameOver) {
+        saveGameToDatabase(game, result.scores);
+        updatePlayerStats(game, result.winner);
+      }
     } catch (error) {
       logger.error(`Draw card error: ${error.message}`);
       socket.emit('error', { message: 'Failed to draw card.' });
@@ -131,6 +136,11 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
             });
           }
         });
+
+        if (result.gameOver) {
+          saveGameToDatabase(game, result.scores);
+          updatePlayerStats(game, result.winner);
+        }
       } else {
         socket.emit('error', { message: result.error || 'Cannot catch UNO.' });
       }
@@ -245,7 +255,7 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
 // DATABASE HELPERS
 // ========================
 
-async function saveGameToDatabase(gameState, scores) {
+export async function saveGameToDatabase(gameState, scores) {
   try {
     const gameData = {
       roomCode: gameState.roomCode,
@@ -279,7 +289,7 @@ async function saveGameToDatabase(gameState, scores) {
   }
 }
 
-async function updatePlayerStats(gameState, winnerId) {
+export async function updatePlayerStats(gameState, winnerId) {
   try {
     for (const player of gameState.players) {
       if (!player.userId) continue; // Skip guest players

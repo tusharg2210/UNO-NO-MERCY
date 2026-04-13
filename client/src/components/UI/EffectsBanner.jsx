@@ -10,12 +10,11 @@ const EffectsBanner = ({ effects }) => {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -50, scale: 0.8 }}
       transition={{ type: 'spring', damping: 12 }}
-      className="fixed top-20 left-1/2 -translate-x-1/2 z-50"
+      className="fixed left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 px-2"
+      style={{ top: 'max(4.5rem, calc(env(safe-area-inset-top) + 3.5rem))' }}
     >
       <div
-        className={`
-          px-8 py-4 rounded-2xl text-center font-bold text-lg
-          shadow-2xl border-2 backdrop-blur-md
+        className={`relative mx-auto rounded-2xl border-2 px-4 py-3 text-center text-base font-bold shadow-2xl backdrop-blur-md sm:px-8 sm:py-4 sm:text-lg
           ${isNoMercy
             ? 'bg-gradient-to-r from-red-900/90 to-orange-900/90 border-red-500/50 text-red-100 shadow-red-500/30'
             : 'bg-gradient-to-r from-purple-900/90 to-blue-900/90 border-purple-500/50 text-purple-100 shadow-purple-500/30'
@@ -32,7 +31,7 @@ const EffectsBanner = ({ effects }) => {
             initial={{ scale: 0.8 }}
             animate={{ scale: [1, 1.1, 1] }}
             transition={{ duration: 0.5 }}
-            className="text-xl sm:text-2xl"
+            className="break-words text-lg sm:text-2xl"
           >
             {effects.message}
           </motion.p>

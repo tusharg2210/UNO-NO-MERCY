@@ -1,5 +1,5 @@
-/** Default when VITE_SERVER_URL is unset (local backend). */
-const FALLBACK = 'http://localhost:5100';
+/** Default when VITE_SERVER_URL is unset (matches server `PORT` default 5000). */
+const FALLBACK = 'http://localhost:5000';
 
 function getEnvServerUrl() {
   return import.meta.env.VITE_SERVER_URL || FALLBACK;

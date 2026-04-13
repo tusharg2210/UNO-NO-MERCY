@@ -96,7 +96,7 @@ ref: 'User',
 },
 winnerUsername: String,
 settings: {
-maxPlayers: { type: Number, default: 6, min: 2, max: 10 },
+maxPlayers: { type: Number, default: 10, min: 2, max: 10 },
 cardsPerHand: { type: Number, default: 7 },
 drawStackEnabled: { type: Boolean, default: true },
 noMercyMode: { type: Boolean, default: true },

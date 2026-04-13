@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
-import { getSocketIoUrl, isRemoteDevProxy } from '../utils/serverUrl.js';
+import { getSocketIoUrl } from '../utils/serverUrl.js';
 
 const SocketContext = createContext(null);
 
@@ -11,9 +11,6 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     const serverUrl = getSocketIoUrl();
-    const useDevProxy = isRemoteDevProxy();
-
-    console.log('🔌 Connecting to:', serverUrl, useDevProxy ? '(via Vite proxy)' : '');
 
     const newSocket = io(serverUrl, {
       transports: ['polling', 'websocket'],
@@ -30,28 +27,22 @@ export const SocketProvider = ({ children }) => {
     newSocket.on('connect', () => {
       setIsConnected(true);
       setConnectionError(null);
-      console.log('✅ Connected:', newSocket.id);
     });
 
     newSocket.on('connect_error', (err) => {
       setConnectionError(err.message);
-      console.error('❌ Connection error:', err.message);
     });
 
-    newSocket.on('disconnect', (reason) => {
+    newSocket.on('disconnect', () => {
       setIsConnected(false);
-      console.log('❌ Disconnected:', reason);
     });
 
-    newSocket.on('reconnect', (attemptNumber) => {
+    newSocket.on('reconnect', () => {
       setIsConnected(true);
       setConnectionError(null);
-      console.log('🔄 Reconnected after', attemptNumber, 'attempts');
     });
 
-    newSocket.on('reconnect_error', (err) => {
-      console.error('🔄 Reconnection error:', err.message);
-    });
+    newSocket.on('reconnect_error', () => {});
 
     setSocket(newSocket);
 

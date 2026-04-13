@@ -59,7 +59,8 @@ function RulesBody() {
         ))}
       </div>
       <div className="px-4 py-2 border-t border-white/10 text-[10px] text-gray-600 shrink-0">
-        Keys: <kbd className="px-1 py-0.5 rounded bg-white/10 text-gray-400">U</kbd> UNO ·{' '}
+        Keys: <kbd className="px-1 py-0.5 rounded bg-white/10 text-gray-400">D</kbd> Draw ·{' '}
+        <kbd className="px-1 py-0.5 rounded bg-white/10 text-gray-400">U</kbd> UNO ·{' '}
         <kbd className="px-1 py-0.5 rounded bg-white/10 text-gray-400">C</kbd> Catch UNO
       </div>
     </>
@@ -75,7 +76,7 @@ export default function GameRulesPanel({ className = '', mobileOpen, onMobileOpe
     <>
       <aside
         id="game-rules-aside"
-        className={`hidden xl:flex flex-col max-h-[calc(100vh-2rem)] rounded-2xl border border-white/10 bg-slate-950/85 backdrop-blur-md w-[min(100%,280px)] shrink-0 overflow-hidden ${className}`}
+        className={`hidden xl:flex flex-col max-h-[min(calc(100dvh-2rem),calc(100vh-2rem))] rounded-2xl border border-white/10 bg-slate-950/85 backdrop-blur-md w-[min(100%,280px)] shrink-0 overflow-hidden ${className}`}
       >
         <RulesBody />
       </aside>
@@ -86,7 +87,8 @@ export default function GameRulesPanel({ className = '', mobileOpen, onMobileOpe
           onClick={() => setDrawerOpen(false)}
         >
           <div
-            className="w-[min(100%,320px)] h-full bg-slate-950 border-l border-white/10 flex flex-col shadow-2xl overflow-hidden"
+            className="flex h-full max-h-[100dvh] w-[min(100vw,320px)] flex-col overflow-hidden border-l border-white/10 bg-slate-950 shadow-2xl"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 shrink-0">
