@@ -85,6 +85,9 @@ export function validatePlayAction(game, playerId, cardId) {
   if (currentPlayer.id !== playerId) {
     return { valid: false, error: 'Not your turn.' };
   }
+  if (currentPlayer.knockedOut) {
+    return { valid: false, error: 'You are knocked out by the Mercy rule.' };
+  }
 
   // Check card exists in player's hand
   const cardIndex = currentPlayer.hand.findIndex(c => c.id === cardId);
