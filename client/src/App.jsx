@@ -6,7 +6,7 @@ import GameBoard from './components/Game/GameBoard.jsx';
 import AuthPage from './components/Auth/AuthPage.jsx';
 import ConnectionStatus from './components/UI/ConnectionStatus.jsx';
 
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 
 function AppContent() {
   const { socket, isConnected, connectionError } = useSocket();
@@ -30,6 +30,7 @@ function AppContent() {
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
       {/* ⚠️ Show connection status */}
+      <Analytics />
       <ConnectionStatus 
         isConnected={isConnected} 
         error={connectionError} 
