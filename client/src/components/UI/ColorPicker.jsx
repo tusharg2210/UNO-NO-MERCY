@@ -8,7 +8,13 @@ const COLORS = [
   { name: 'yellow', hex: '#EAB308', gradient: 'from-yellow-500 to-yellow-600', emoji: '🟡' },
 ];
 
-const ColorPicker = ({ onSelectColor, onClose }) => {
+const ColorPicker = ({
+  onSelectColor,
+  onClose,
+  title = 'Choose a Color',
+  subtitle = 'Select the color for your wild card',
+  allowCancel = true,
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -25,8 +31,8 @@ const ColorPicker = ({ onSelectColor, onClose }) => {
         className="glass p-8 max-w-sm w-full"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-2xl font-bold text-center mb-2">Choose a Color</h3>
-        <p className="text-gray-400 text-center text-sm mb-6">Select the color for your wild card</p>
+        <h3 className="text-2xl font-bold text-center mb-2">{title}</h3>
+        <p className="text-gray-400 text-center text-sm mb-6">{subtitle}</p>
 
         <div className="grid grid-cols-2 gap-4">
           {COLORS.map((color) => (
@@ -47,12 +53,14 @@ const ColorPicker = ({ onSelectColor, onClose }) => {
           ))}
         </div>
 
-        <button
-          onClick={onClose}
-          className="w-full mt-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
-        >
-          Cancel
-        </button>
+        {allowCancel && (
+          <button
+            onClick={onClose}
+            className="w-full mt-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
+          >
+            Cancel
+          </button>
+        )}
       </motion.div>
     </motion.div>
   );

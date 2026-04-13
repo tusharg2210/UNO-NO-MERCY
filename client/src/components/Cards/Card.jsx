@@ -2,19 +2,20 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 const CARD_CONFIG = {
-  number: { getDisplay: (card) => card.value, emoji: '' },
-  skip: { getDisplay: () => '⊘', emoji: '🚫' },
-  reverse: { getDisplay: () => '⇄', emoji: '🔄' },
-  draw_two: { getDisplay: () => '+2', emoji: '' },
-  wild: { getDisplay: () => 'W', emoji: '🌈' },
-  wild_draw_four: { getDisplay: () => '+4', emoji: '' },
-  skip_everyone: { getDisplay: () => '⊘✕', emoji: '🚫' },
-  wild_draw_six: { getDisplay: () => '+6', emoji: '🔥' },
-  wild_draw_ten: { getDisplay: () => '+10', emoji: '💀' },
-  discard_all: { getDisplay: () => 'ALL', emoji: '💣' },
-  reverse_draw_four: { getDisplay: () => '⇄+4', emoji: '🔥' },
-  swap_hands: { getDisplay: () => '⇋', emoji: '🔀' },
-  wild_color_roulette: { getDisplay: () => '?', emoji: '🎰' },
+  number: { getDisplay: (card) => String(card.value), shortLabel: 'number' },
+  skip: { getDisplay: () => 'SKIP', shortLabel: 'skip' },
+  reverse: { getDisplay: () => 'REV', shortLabel: 'reverse' },
+  draw_two: { getDisplay: () => '+2', shortLabel: 'draw two' },
+  draw_four: { getDisplay: () => '+4', shortLabel: 'draw four' },
+  wild: { getDisplay: () => 'WILD', shortLabel: 'wild' },
+  wild_draw_four: { getDisplay: () => 'W+4', shortLabel: 'wild draw four' },
+  skip_everyone: { getDisplay: () => 'SKIP ALL', shortLabel: 'skip everyone' },
+  wild_draw_six: { getDisplay: () => 'W+6', shortLabel: 'wild draw six' },
+  wild_draw_ten: { getDisplay: () => 'W+10', shortLabel: 'wild draw ten' },
+  discard_all: { getDisplay: () => 'ALL', shortLabel: 'discard all' },
+  reverse_draw_four: { getDisplay: () => 'R+4', shortLabel: 'reverse draw four' },
+  swap_hands: { getDisplay: () => 'SWAP', shortLabel: 'swap hands' },
+  wild_color_roulette: { getDisplay: () => 'ROUL', shortLabel: 'color roulette' },
 };
 
 const COLOR_CLASSES = {
@@ -27,8 +28,9 @@ const COLOR_CLASSES = {
 };
 
 const Card = ({ card, onClick, playable = false, index = 0, small = false }) => {
-  const config = CARD_CONFIG[card.type] || { getDisplay: () => '?', emoji: '' };
+  const config = CARD_CONFIG[card.type] || { getDisplay: () => '?', shortLabel: 'unknown' };
   const colorClass = COLOR_CLASSES[card.color] || 'card-gradient-wild';
+  const display = config.getDisplay(card);
 
   const isNoMercy = [
     'skip_everyone', 'wild_draw_six', 'wild_draw_ten',
@@ -46,19 +48,18 @@ const Card = ({ card, onClick, playable = false, index = 0, small = false }) => 
       className={`
         ${small ? 'w-14 h-20' : 'w-20 h-28 sm:w-24 sm:h-36'}
         ${colorClass} 
-        rounded-xl border-2 
+        rounded-2xl border-2
         ${playable 
-          ? 'border-white/40 cursor-pointer hover:border-white hover:shadow-lg hover:shadow-white/20' 
+          ? 'border-white/40 cursor-pointer hover:border-white hover:shadow-xl hover:shadow-white/25' 
           : 'border-white/20 opacity-70 cursor-not-allowed'
         }
-        ${isNoMercy ? 'ring-2 ring-red-500/50' : ''}
+        ${isNoMercy ? 'ring-2 ring-red-400/60' : ''}
         flex flex-col items-center justify-center
         relative overflow-hidden select-none
-        card-shadow transition-colors duration-200
+        card-shadow transition-all duration-200
       `}
     >
-      {/* Inner white border effect */}
-      <div className="absolute inset-1 rounded-lg border border-white/20 pointer-events-none" />
+      <div className="absolute inset-1 rounded-xl border border-white/25 pointer-events-none" />
 
       {/* No Mercy indicator */}
       {isNoMercy && (
@@ -68,35 +69,27 @@ const Card = ({ card, onClick, playable = false, index = 0, small = false }) => 
         </div>
       )}
 
-      {/* Card Value */}
-      <span className={`${small ? 'text-lg' : 'text-2xl sm:text-4xl'} font-black text-white drop-shadow-lg`}>
-        {config.getDisplay(card)}
+      {/* Center value */}
+      <span className={`${small ? 'text-sm' : 'text-xl sm:text-3xl'} font-black text-white tracking-wide drop-shadow-lg`}>
+        {display}
       </span>
-
-      {/* Emoji */}
-      {config.emoji && (
-        <span className={`${small ? 'text-xs' : 'text-sm sm:text-base'} mt-0.5`}>
-          {config.emoji}
-        </span>
-      )}
 
       {/* Type label */}
       <span className={`${small ? 'text-[5px]' : 'text-[7px] sm:text-[9px]'} text-white/70 
-                        uppercase tracking-wider mt-1 font-semibold`}>
-        {card.type.replace(/_/g, ' ')}
+                        uppercase tracking-[0.18em] mt-1 font-semibold`}>
+        {config.shortLabel}
       </span>
 
       {/* Corner values */}
-      <span className="absolute top-1 left-1.5 text-[8px] sm:text-xs font-bold text-white/80">
-        {config.getDisplay(card)}
+      <span className="absolute top-1.5 left-2 text-[8px] sm:text-[11px] font-bold text-white/85">
+        {display}
       </span>
-      <span className="absolute bottom-1 right-1.5 text-[8px] sm:text-xs font-bold text-white/80 rotate-180">
-        {config.getDisplay(card)}
+      <span className="absolute bottom-1.5 right-2 text-[8px] sm:text-[11px] font-bold text-white/85 rotate-180">
+        {display}
       </span>
 
       {/* Shine effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent 
-                      pointer-events-none rounded-xl" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/10 pointer-events-none rounded-2xl" />
     </motion.div>
   );
 };

@@ -43,7 +43,7 @@ const Lobby = ({ user, onGameStart }) => {
     const handlePlayerJoined = ({ game, username }) => {
       console.log('👋 Player joined:', username);
       setPlayers(game.players || []);
-      toast(`🎮 ${username} joined!`, { icon: '👋' });
+      toast(`${username} joined`);
     };
 
     const handleGameStarted = (data) => {
@@ -54,7 +54,7 @@ const Lobby = ({ user, onGameStart }) => {
     };
 
     const handlePlayerLeft = ({ username }) => {
-      toast(`${username} left`, { icon: '👋' });
+      toast(`${username} left`);
     };
 
     const handleError = ({ message }) => {
@@ -129,10 +129,7 @@ const Lobby = ({ user, onGameStart }) => {
         <div className="w-full max-w-lg animate-fade-in">
           {/* Header */}
           <div className="text-center mb-10">
-            <h1 className="text-6xl font-black bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 to-blue-500 bg-clip-text text-transparent">
-              UNO
-            </h1>
-            <p className="text-3xl font-bold text-red-500 tracking-widest">NO MERCY 🔥</p>
+            <h1 className="text-4xl font-bold tracking-tight text-slate-100">UNO No Mercy</h1>
             
             {/* Connection Status */}
             <div className="mt-4 inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2">
@@ -155,12 +152,11 @@ const Lobby = ({ user, onGameStart }) => {
 
           <div className="grid gap-6">
             {/* Create Room Card */}
-            <div className="glass p-6 hover:border-purple-500/30 transition-all duration-300">
+            <div className="glass p-6 hover:border-slate-500/40 transition-all duration-200">
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-3xl">🏠</span>
                 <div>
                   <h2 className="text-xl font-bold">Create Room</h2>
-                  <p className="text-gray-400 text-sm">Start a new game and invite friends</p>
+                  <p className="text-slate-400 text-sm">Start a new game and invite players</p>
                 </div>
               </div>
               <button 
@@ -168,21 +164,20 @@ const Lobby = ({ user, onGameStart }) => {
                 disabled={!isConnected}
                 className={`w-full py-3 px-8 rounded-xl font-bold transition-all duration-300
                   ${isConnected 
-                    ? 'btn-primary' 
+                  ? 'btn-primary'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                   }`}
               >
-                {isConnected ? '✨ Create New Room' : '⏳ Connecting...'}
+                {isConnected ? 'Create Room' : 'Connecting...'}
               </button>
             </div>
 
             {/* Join Room Card */}
-            <div className="glass p-6 hover:border-blue-500/30 transition-all duration-300">
+            <div className="glass p-6 hover:border-slate-500/40 transition-all duration-200">
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-3xl">🚪</span>
                 <div>
                   <h2 className="text-xl font-bold">Join Room</h2>
-                  <p className="text-gray-400 text-sm">Enter a room code to join a game</p>
+                  <p className="text-slate-400 text-sm">Enter a room code to join</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -223,7 +218,7 @@ const Lobby = ({ user, onGameStart }) => {
       <div className="w-full max-w-lg animate-fade-in">
         {/* Room Header */}
         <div className="glass p-6 mb-6 text-center">
-          <p className="text-gray-400 text-sm mb-2">Room Code</p>
+          <p className="text-slate-400 text-sm mb-2">Room Code</p>
           <div className="flex items-center justify-center gap-3 mb-3">
             <h2 className="text-4xl font-black tracking-[0.3em] text-white">
               {currentRoom}
@@ -236,10 +231,10 @@ const Lobby = ({ user, onGameStart }) => {
                   : 'bg-white/10 text-gray-400 hover:bg-white/20 hover:text-white'
               }`}
             >
-              {copied ? '✅' : '📋'}
+              {copied ? 'Done' : 'Copy'}
             </button>
           </div>
-          <p className="text-gray-400 text-sm">Share this code with your friends!</p>
+          <p className="text-slate-400 text-sm">Share this code with your players</p>
         </div>
 
         {/* Players List */}
@@ -263,7 +258,7 @@ const Lobby = ({ user, onGameStart }) => {
                     : 'bg-gradient-to-br from-purple-500 to-blue-500'
                   }`}
                 >
-                  {index === 0 ? '👑' : player.username?.[0]?.toUpperCase()}
+                  {index === 0 ? 'H' : player.username?.[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold">{player.username}</p>
@@ -298,11 +293,11 @@ const Lobby = ({ user, onGameStart }) => {
               disabled={players.length < 2}
               className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300
                 ${players.length >= 2
-                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 hover:scale-105 hover:shadow-lg hover:shadow-green-500/25 active:scale-95 text-white'
+                  ? 'bg-slate-100 text-slate-900 hover:bg-white transition-all duration-200'
                   : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                 }`}
             >
-              {players.length >= 2 ? '🚀 Start Game!' : '⏳ Need at least 2 players'}
+              {players.length >= 2 ? 'Start Game' : 'Need at least 2 players'}
             </button>
           ) : (
             <div className="text-center py-4">

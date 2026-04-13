@@ -8,6 +8,7 @@ export const CARD_TYPES = {
   SKIP: 'skip',
   REVERSE: 'reverse',
   DRAW_TWO: 'draw_two',
+  DRAW_FOUR: 'draw_four',
   WILD: 'wild',
   WILD_DRAW_FOUR: 'wild_draw_four',
 
@@ -24,6 +25,7 @@ export const CARD_TYPES = {
 // Cards that can be stacked on draw pile
 export const STACKABLE_DRAW_TYPES = [
   CARD_TYPES.DRAW_TWO,
+  CARD_TYPES.DRAW_FOUR,
   CARD_TYPES.WILD_DRAW_FOUR,
   CARD_TYPES.WILD_DRAW_SIX,
   CARD_TYPES.WILD_DRAW_TEN,
@@ -33,6 +35,7 @@ export const STACKABLE_DRAW_TYPES = [
 // Draw amounts per card type
 export const DRAW_AMOUNTS = {
   [CARD_TYPES.DRAW_TWO]: 2,
+  [CARD_TYPES.DRAW_FOUR]: 4,
   [CARD_TYPES.WILD_DRAW_FOUR]: 4,
   [CARD_TYPES.REVERSE_DRAW_FOUR]: 4,
   [CARD_TYPES.WILD_DRAW_SIX]: 6,

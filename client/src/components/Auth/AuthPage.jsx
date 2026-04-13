@@ -50,7 +50,7 @@ try {
   // ✅ Store token
   localStorage.setItem('token', data.token);
 
-  toast.success(isLogin ? 'Welcome back! 🎮' : 'Account created! 🎉');
+  toast.success(isLogin ? 'Welcome back' : 'Account created');
 
   onAuth(data.user);
 } catch (err) {
@@ -73,128 +73,102 @@ onAuth({
   isGuest: true,
 });
 
-toast.success(`Playing as ${randomName} 🎮`);
+toast.success(`Playing as ${randomName}`);
 
 
 };
 
-return ( <div className="min-h-screen flex items-center justify-center p-4">
-{/* Background */} <div className="fixed inset-0 overflow-hidden pointer-events-none"> <div className="absolute top-20 left-10 text-8xl opacity-10 animate-bounce-slow">🎴</div> <div className="absolute top-40 right-20 text-6xl opacity-10 animate-bounce-slow delay-300">🔴</div> <div className="absolute bottom-20 left-1/4 text-7xl opacity-10 animate-bounce-slow delay-700">🟢</div> <div className="absolute bottom-40 right-1/3 text-5xl opacity-10 animate-bounce-slow delay-500">🔵</div> </div>
+return (
+  <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="glass w-full max-w-md p-8 animate-fade-in relative z-10">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold tracking-tight text-slate-100">UNO No Mercy</h1>
+        <p className="text-slate-400 text-sm mt-2">Sign in to join a room and start playing</p>
+      </div>
 
+      <div className="flex bg-slate-800/70 rounded-lg p-1 mb-6">
+        <button
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all duration-200
+            ${isLogin ? 'bg-slate-100 text-slate-900' : 'text-slate-300 hover:text-white'}`}
+          onClick={() => setIsLogin(true)}
+        >
+          Login
+        </button>
+        <button
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all duration-200
+            ${!isLogin ? 'bg-slate-100 text-slate-900' : 'text-slate-300 hover:text-white'}`}
+          onClick={() => setIsLogin(false)}
+        >
+          Register
+        </button>
+      </div>
 
-  <div className="glass w-full max-w-md p-8 animate-fade-in relative z-10">
-    {/* Logo */}
-    <div className="text-center mb-8">
-      <h1 className="text-5xl font-black bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 to-blue-500 bg-clip-text text-transparent">
-        UNO
-      </h1>
-      <p className="text-2xl font-bold text-red-500 mt-1 tracking-widest">
-        NO MERCY 🔥
-      </p>
-      <p className="text-gray-400 text-sm mt-2">
-        The ultimate card game experience
-      </p>
-    </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {!isLogin && (
+          <div className="animate-slide-down">
+            <label className="block text-sm text-slate-400 mb-1">Username</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Enter username"
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              required={!isLogin}
+            />
+          </div>
+        )}
 
-    {/* Toggle */}
-    <div className="flex bg-white/5 rounded-xl p-1 mb-6">
-      <button
-        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-300
-          ${isLogin ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-        onClick={() => setIsLogin(true)}
-      >
-        Login
-      </button>
-      <button
-        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-300
-          ${!isLogin ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-        onClick={() => setIsLogin(false)}
-      >
-        Register
-      </button>
-    </div>
-
-    {/* Form */}
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {!isLogin && (
-        <div className="animate-slide-down">
-          <label className="block text-sm text-gray-400 mb-1">Username</label>
+        <div>
+          <label className="block text-sm text-slate-400 mb-1">Email</label>
           <input
-            type="text"
+            type="email"
             className="input-field"
-            placeholder="Enter username"
-            value={formData.username}
-            onChange={(e) =>
-              setFormData({ ...formData, username: e.target.value })
-            }
-            required={!isLogin}
+            placeholder="Enter email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
           />
         </div>
-      )}
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Email</label>
-        <input
-          type="email"
-          className="input-field"
-          placeholder="Enter email"
-          value={formData.email}
-          onChange={(e) =>
-            setFormData({ ...formData, email: e.target.value })
-          }
-          required
-        />
-      </div>
+        <div>
+          <label className="block text-sm text-slate-400 mb-1">Password</label>
+          <input
+            type="password"
+            className="input-field"
+            placeholder="Enter password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Password</label>
-        <input
-          type="password"
-          className="input-field"
-          placeholder="Enter password"
-          value={formData.password}
-          onChange={(e) =>
-            setFormData({ ...formData, password: e.target.value })
-          }
-          required
-        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-primary w-full flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-100 rounded-full animate-spin" />
+          ) : (
+            isLogin ? 'Login' : 'Register'
+          )}
+        </button>
+      </form>
+
+      <div className="flex items-center gap-4 my-6">
+        <div className="flex-1 h-px bg-slate-700" />
+        <span className="text-slate-500 text-sm">OR</span>
+        <div className="flex-1 h-px bg-slate-700" />
       </div>
 
       <button
-        type="submit"
-        disabled={loading}
-        className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handleQuickPlay}
+        className="w-full py-3 px-8 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 font-medium hover:bg-slate-800 transition-all duration-200"
       >
-        {loading ? (
-          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-        ) : (
-          <>
-            {isLogin ? '🎮 Login' : '🚀 Register'}
-          </>
-        )}
+        Quick Play (No Account)
       </button>
-    </form>
-
-    {/* Divider */}
-    <div className="flex items-center gap-4 my-6">
-      <div className="flex-1 h-px bg-white/10" />
-      <span className="text-gray-500 text-sm">OR</span>
-      <div className="flex-1 h-px bg-white/10" />
     </div>
-
-    {/* Quick Play */}
-    <button
-      onClick={handleQuickPlay}
-      className="w-full py-3 px-8 bg-white/5 border border-white/10 rounded-xl 
-                 text-gray-300 font-semibold hover:bg-white/10 hover:text-white 
-                 transition-all duration-300 hover:scale-105 active:scale-95"
-    >
-      ⚡ Quick Play (No Account)
-    </button>
   </div>
-</div>
-
-
 );
 };
 

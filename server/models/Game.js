@@ -8,6 +8,7 @@ type: {
 type: String,
 enum: [
 'number', 'skip', 'reverse', 'draw_two',
+'draw_four',
 'wild', 'wild_draw_four',
 'skip_everyone', 'wild_draw_six', 'wild_draw_ten',
 'discard_all', 'reverse_draw_four', 'swap_hands',
