@@ -19,6 +19,27 @@ import userRoutes from './routes/userRoutes.js';
 // Socket
 import { initializeSocket } from './sockets/socketHandler.js';
 
+/** Origins allowed for CORS + Socket.io (browser sends e.g. http://localhost:3000, no trailing slash). */
+function getAllowedOrigins() {
+  const raw = [process.env.CLIENT_URLS, process.env.CLIENT_URL].filter(Boolean).join(',');
+  const fromEnv = raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  const localDev = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+  ];
+  return [...new Set([...fromEnv, ...localDev])];
+}
+
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  return getAllowedOrigins().includes(origin);
+}
+
 // Initialize Express
 const app = express();
 const server = createServer(app);
@@ -27,7 +48,9 @@ const server = createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+      callback(null, isOriginAllowed(origin));
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -39,11 +62,17 @@ const io = new Server(server, {
 // Connect Database
 connectDB();
 
-// Middleware
-app.use(helmet());
+// Middleware — default CORP is "same-origin" and blocks cross-origin XHR (Socket.io polling).
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 app.use(cors({
-  origin: process.env.CLIENT_URL,
+  origin: (origin, callback) => {
+    callback(null, isOriginAllowed(origin));
+  },
   credentials: true,
 }));
 app.use(json({ limit: '10mb' }));
@@ -54,10 +83,13 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 if (process.env.NODE_ENV === 'production') {
-  setInterval(() => {
-    fetch(`${process.env.CLIENT_URL}/health`)
-      .catch(() => {});
-  }, 14 * 60 * 1000); // 14 minutes
+  const primaryClient =
+    process.env.CLIENT_URL?.split(',')[0]?.trim()?.replace(/\/$/, '') || '';
+  if (primaryClient) {
+    setInterval(() => {
+      fetch(`${primaryClient}/health`).catch(() => {});
+    }, 14 * 60 * 1000); // 14 minutes
+  }
 }
 
 // API Routes
@@ -91,7 +123,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
-  logger.info(`🔗 Client URL: ${process.env.CLIENT_URL}`);
+  logger.info(`🔗 Allowed CORS origins: ${getAllowedOrigins().join(', ')}`);
 });
 
 // Handle unhandled promise rejections
