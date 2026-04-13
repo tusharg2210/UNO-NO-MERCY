@@ -30,7 +30,6 @@ function AppContent() {
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[radial-gradient(circle_at_top,#111827_0%,#020617_55%,#020617_100%)]">
       {/* ⚠️ Show connection status */}
-      <Analytics />
       <ConnectionStatus 
         isConnected={isConnected} 
         error={connectionError} 
@@ -57,6 +56,8 @@ function AppContent() {
 
 function App() {
   return (
+    <>
+      <Analytics />
     <SocketProvider>
       <Toaster
         position="top-center"
@@ -70,6 +71,7 @@ function App() {
       />
       <AppContent />
     </SocketProvider>
+    </>
   );
 }
 
