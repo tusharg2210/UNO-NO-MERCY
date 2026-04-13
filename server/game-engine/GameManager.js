@@ -83,6 +83,7 @@ class GameManager {
       hand: [],
       saidUno: false,
       connected: true,
+      knockedOut: false,
       cardsPlayed: 0,
     });
 
@@ -111,17 +112,18 @@ class GameManager {
 
     // If all players disconnected, remove game
     const connectedPlayers = game.players.filter(p => p.connected);
+    const activePlayers = game.players.filter(p => this.isPlayerActive(p));
     if (connectedPlayers.length === 0) {
       this.removeGame(roomCode);
       return { removed: true };
     }
 
     // If only 1 player left in active game, they win
-    if (game.status === 'playing' && connectedPlayers.length === 1) {
+    if (game.status === 'playing' && activePlayers.length === 1) {
       game.status = 'finished';
-      game.winner = connectedPlayers[0].id;
-      game.winnerUsername = connectedPlayers[0].username;
-      return { game, gameOver: true, winner: connectedPlayers[0] };
+      game.winner = activePlayers[0].id;
+      game.winnerUsername = activePlayers[0].username;
+      return { game, gameOver: true, winner: activePlayers[0] };
     }
 
     // Adjust current player index if needed
@@ -152,6 +154,7 @@ class GameManager {
     game.players.forEach(player => {
       player.hand = game.drawPile.splice(0, cardsPerHand);
       player.saidUno = false;
+      player.knockedOut = false;
     });
 
     // Flip first card - ensure it's a number card
@@ -197,6 +200,20 @@ class GameManager {
         return { success: false, error: 'Must choose a valid color.' };
       }
     }
+    if (card.type === CARD_TYPES.NUMBER && card.value === 7 && !swapTargetId) {
+      return { success: false, error: 'You must choose a player to swap hands with on 7.' };
+    }
+    if (
+      (card.type === CARD_TYPES.NUMBER && card.value === 7) ||
+      card.type === CARD_TYPES.SWAP_HANDS
+    ) {
+      const swapTarget = game.players.find(
+        p => p.id === swapTargetId && p.id !== currentPlayer.id && p.connected && !p.knockedOut
+      );
+      if (!swapTarget) {
+        return { success: false, error: 'Invalid swap target.' };
+      }
+    }
 
     // Remove card from hand
     currentPlayer.hand.splice(cardIndex, 1);
@@ -205,6 +222,10 @@ class GameManager {
 
     // Process card effects
     const effects = this.processCardEffect(game, card, chosenColor, swapTargetId);
+    const mercyState = this.applyMercyRule(game);
+    if (mercyState.knockedOutPlayers.length > 0) {
+      effects.knockedOutPlayers = mercyState.knockedOutPlayers;
+    }
 
     // Add to game log
     this.addLog(game, 'play_card', currentPlayer.username, card, {
@@ -217,6 +238,9 @@ class GameManager {
     if (currentPlayer.hand.length === 1) {
       currentPlayer.saidUno = false;
     }
+
+    const mercyWin = this.resolveMercyWin(game, effects);
+    if (mercyWin) return mercyWin;
 
     // Check win condition
     if (currentPlayer.hand.length === 0) {
@@ -237,6 +261,24 @@ class GameManager {
     switch (card.type) {
       case CARD_TYPES.NUMBER:
         game.currentColor = card.color;
+        if (card.value === 7) {
+          const currentP = game.players[game.currentPlayerIndex];
+          const targetP = game.players.find(
+            p => p.id === swapTargetId && p.id !== currentP.id && p.connected && !p.knockedOut
+          );
+          if (targetP) {
+            const tempHand = [...currentP.hand];
+            currentP.hand = [...targetP.hand];
+            targetP.hand = tempHand;
+            effects.message = `🔀 7-rule: swapped hands with ${targetP.username}!`;
+            effects.type = 'swap';
+            effects.swappedWith = targetP.id;
+          }
+        } else if (card.value === 0) {
+          this.passHandsByDirection(game);
+          effects.message = '↪️ 0-rule: all players passed hands!';
+          effects.type = 'pass_hands';
+        }
         break;
 
       case CARD_TYPES.SKIP:
@@ -348,10 +390,15 @@ class GameManager {
       }
 
       case CARD_TYPES.WILD_COLOR_ROULETTE: {
-        const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-        game.currentColor = randomColor;
-        effects.message = `🎰 Color Roulette: ${randomColor.toUpperCase()}!`;
-        effects.rouletteColor = randomColor;
+        const rouletteColor = chosenColor && isValidColor(chosenColor)
+          ? chosenColor
+          : COLORS[Math.floor(Math.random() * COLORS.length)];
+        const rouletteResult = this.resolveColorRoulette(game, rouletteColor);
+        game.currentColor = rouletteColor;
+        effects.message = `🎰 Roulette (${rouletteColor.toUpperCase()}): ${rouletteResult.targetUsername} drew ${rouletteResult.drawnCount} cards`;
+        effects.rouletteColor = rouletteColor;
+        effects.rouletteTarget = rouletteResult.targetId;
+        effects.rouletteDrawnCount = rouletteResult.drawnCount;
         effects.type = 'no_mercy';
         break;
       }
@@ -385,6 +432,7 @@ class GameManager {
     // Next player must draw all stacked cards
     this.drawCards(game, nextIndex, game.drawStack);
     game.drawStack = 0;
+    this.applyMercyRule(game);
     game.currentPlayerIndex = nextIndex;
     this.nextTurn(game);
   }
@@ -429,6 +477,20 @@ class GameManager {
     });
 
     game.drawStack = 0;
+    const mercyState = this.applyMercyRule(game);
+    const mercyWin = this.resolveMercyWin(game, {
+      skipNext: false,
+      type: 'draw',
+      message: '',
+      knockedOutPlayers: mercyState.knockedOutPlayers,
+    });
+    if (mercyWin) {
+      return {
+        ...mercyWin,
+        drawnCards,
+        drawCount,
+      };
+    }
     this.nextTurn(game);
 
     return {
@@ -436,6 +498,7 @@ class GameManager {
       game,
       drawnCards,
       drawCount,
+      knockedOutPlayers: mercyState.knockedOutPlayers,
     };
   }
 
@@ -482,6 +545,21 @@ class GameManager {
       // Penalty: draw 4 cards
       const targetIndex = game.players.findIndex(p => p.id === targetPlayerId);
       const drawnCards = this.drawCards(game, targetIndex, 4);
+      const mercyState = this.applyMercyRule(game);
+      const mercyWin = this.resolveMercyWin(game, {
+        skipNext: false,
+        type: 'uno_penalty',
+        message: '',
+        knockedOutPlayers: mercyState.knockedOutPlayers,
+      });
+      if (mercyWin) {
+        return {
+          ...mercyWin,
+          catcher: catcher.username,
+          caught: target.username,
+          drawnCards,
+        };
+      }
 
       this.addLog(game, 'catch_uno', catcher.username, null, {
         caught: target.username,
@@ -494,6 +572,7 @@ class GameManager {
         catcher: catcher.username,
         caught: target.username,
         drawnCards,
+        knockedOutPlayers: mercyState.knockedOutPlayers,
       };
     }
 
@@ -505,17 +584,7 @@ class GameManager {
   // ========================
 
   getNextPlayerIndex(game) {
-    const totalPlayers = game.players.length;
-    let nextIndex = game.currentPlayerIndex;
-
-    // Find next connected player
-    let attempts = 0;
-    do {
-      nextIndex = ((nextIndex + game.direction) % totalPlayers + totalPlayers) % totalPlayers;
-      attempts++;
-    } while (!game.players[nextIndex].connected && attempts < totalPlayers);
-
-    return nextIndex;
+    return this.getNextPlayablePlayerIndex(game, game.currentPlayerIndex);
   }
 
   nextTurn(game) {
@@ -596,6 +665,7 @@ class GameManager {
         hand: p.id === playerId ? p.hand : [],
         saidUno: p.saidUno,
         connected: p.connected,
+        knockedOut: !!p.knockedOut,
         cardsPlayed: p.cardsPlayed,
       })),
       topCard: game.discardPile[game.discardPile.length - 1],
@@ -643,6 +713,106 @@ class GameManager {
     });
 
     return { waiting, playing, totalPlayers, totalRooms: this.games.size };
+  }
+
+  getNextPlayablePlayerIndex(game, fromIndex) {
+    const totalPlayers = game.players.length;
+    let nextIndex = fromIndex;
+
+    let attempts = 0;
+    do {
+      nextIndex = ((nextIndex + game.direction) % totalPlayers + totalPlayers) % totalPlayers;
+      attempts++;
+    } while (
+      !this.isPlayerActive(game.players[nextIndex]) &&
+      attempts < totalPlayers
+    );
+
+    return nextIndex;
+  }
+
+  isPlayerActive(player) {
+    return player.connected && !player.knockedOut;
+  }
+
+  getActivePlayers(game) {
+    return game.players.filter(player => this.isPlayerActive(player));
+  }
+
+  passHandsByDirection(game) {
+    const activeIndices = [];
+    let idx = game.currentPlayerIndex;
+    const visited = new Set();
+
+    while (!visited.has(idx)) {
+      visited.add(idx);
+      if (this.isPlayerActive(game.players[idx])) {
+        activeIndices.push(idx);
+      }
+      idx = ((idx + game.direction) % game.players.length + game.players.length) % game.players.length;
+    }
+
+    if (activeIndices.length <= 1) return;
+
+    const oldHands = new Map(activeIndices.map(i => [i, [...game.players[i].hand]]));
+    for (let i = 0; i < activeIndices.length; i++) {
+      const giver = activeIndices[i];
+      const receiver = activeIndices[(i + 1) % activeIndices.length];
+      game.players[receiver].hand = oldHands.get(giver);
+    }
+  }
+
+  resolveColorRoulette(game, rouletteColor) {
+    const targetIndex = this.getNextPlayablePlayerIndex(game, game.currentPlayerIndex);
+    const targetPlayer = game.players[targetIndex];
+    const revealed = [];
+
+    while (true) {
+      if (game.drawPile.length === 0) {
+        this.reshuffleDiscardPile(game);
+      }
+      if (game.drawPile.length === 0) break;
+
+      const nextCard = game.drawPile.shift();
+      revealed.push(nextCard);
+
+      const matchesColor =
+        nextCard.type !== CARD_TYPES.WILD &&
+        nextCard.color === rouletteColor;
+      if (matchesColor) break;
+    }
+
+    targetPlayer.hand.push(...revealed);
+    this.nextTurn(game);
+
+    return {
+      targetId: targetPlayer.id,
+      targetUsername: targetPlayer.username,
+      drawnCount: revealed.length,
+    };
+  }
+
+  applyMercyRule(game) {
+    const knockedOutPlayers = [];
+    for (const player of game.players) {
+      if (!player.knockedOut && player.hand.length >= 25) {
+        player.knockedOut = true;
+        knockedOutPlayers.push({
+          id: player.id,
+          username: player.username,
+          cards: player.hand.length,
+        });
+      }
+    }
+    return { knockedOutPlayers };
+  }
+
+  resolveMercyWin(game, effects) {
+    const activePlayers = this.getActivePlayers(game);
+    if (game.status === 'playing' && activePlayers.length === 1) {
+      return this.handleWin(game, activePlayers[0], effects);
+    }
+    return null;
   }
 }
 

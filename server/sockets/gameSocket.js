@@ -71,6 +71,11 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
             hand: player.hand,
             gameState: gameManager.sanitizeForPlayer(game, player.id),
             drewCards: player.id === socket.id ? result.drawCount : 0,
+            knockedOutPlayers: result.knockedOutPlayers || [],
+            gameOver: result.gameOver || false,
+            winner: result.winner || null,
+            winnerUsername: result.winnerUsername || null,
+            scores: result.scores || null,
           });
         }
       });
@@ -118,6 +123,11 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
               gameState: gameManager.sanitizeForPlayer(game, player.id),
               catcher: result.catcher,
               caught: result.caught,
+              knockedOutPlayers: result.knockedOutPlayers || [],
+              gameOver: result.gameOver || false,
+              winner: result.winner || null,
+              winnerUsername: result.winnerUsername || null,
+              scores: result.scores || null,
             });
           }
         });
@@ -215,6 +225,7 @@ export function setupGameSocket(io, socket, connectedUsers, gameManager) {
       oldGame.players.forEach(player => {
         player.hand = [];
         player.saidUno = false;
+        player.knockedOut = false;
         player.cardsPlayed = 0;
       });
 
