@@ -6,6 +6,8 @@ import GameBoard from './components/Game/GameBoard.jsx';
 import AuthPage from './components/Auth/AuthPage.jsx';
 import ConnectionStatus from './components/UI/ConnectionStatus.jsx';
 
+import { Analytics } from "@vercel/analytics/next"
+
 function AppContent() {
   const { socket, isConnected, connectionError } = useSocket();
   const [user, setUser] = useState(null);
